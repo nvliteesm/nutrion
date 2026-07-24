@@ -5,9 +5,9 @@ pydantic==2.10.4
 pydantic-settings==2.7.0
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
-chromadb==0.5.23
 httpx==0.28.1
 pillow==11.1.0
 pypdf==5.1.0
+rapidocr-onnxruntime==1.4.4
 python-dateutil==2.9.0.post0
 apscheduler==3.10.4
