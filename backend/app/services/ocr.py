@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 
-_rapid_ocr = None
-
 
 def _mime_for(path: Path) -> str:
     ext = path.suffix.lower()
@@ -26,29 +24,6 @@ def _mime_for(path: Path) -> str:
         ".bmp": "image/bmp",
         ".gif": "image/gif",
     }.get(ext, "image/jpeg")
-
-
-def _get_rapid_ocr():
-    global _rapid_ocr
-    if _rapid_ocr is None:
-        from rapidocr_onnxruntime import RapidOCR
-
-        _rapid_ocr = RapidOCR()
-    return _rapid_ocr
-
-
-def local_ocr_text(path: Path) -> str | None:
-    try:
-        engine = _get_rapid_ocr()
-        result, _ = engine(str(path))
-        if not result:
-            return None
-        lines = [item[1] for item in result if len(item) >= 2 and item[1]]
-        text = "\n".join(lines).strip()
-        return text or None
-    except Exception:
-        logger.exception("Local RapidOCR failed")
-        return None
 
 
 def stub_ocr_text(path: Path) -> str:
@@ -96,12 +71,6 @@ async def extract_text_from_image(path: Path | str) -> str:
         text = await azure_client.vision_ocr(b64, _mime_for(path))
         if text and text.strip() and "stub OCR" not in text:
             return text.strip()
-        logger.warning("Azure vision OCR unavailable; trying local OCR")
+        logger.warning("Azure vision OCR unavailable; falling back to stub")
 
-    # 3) Local RapidOCR
-    local = local_ocr_text(path)
-    if local:
-        return local
-
-    logger.warning("Local OCR empty; falling back to stub")
     return stub_ocr_text(path)

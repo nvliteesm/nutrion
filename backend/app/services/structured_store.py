@@ -22,6 +22,7 @@ async def save_intake(
     analysis_id: str = "",
 ) -> Intake:
     n = meal.nutrients
+    resolved_source = source or meal.source
     row = Intake(
         user_id=user_id,
         kind=kind,

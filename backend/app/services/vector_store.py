@@ -139,7 +139,8 @@ async def upsert_meal(
     intake_id: int,
     source: str,
     kind: str = "food",
-) -> None:
+) -> str:
+    """Module-level API used by ingest/confirm (delegates to Chroma VectorStore)."""
     n = meal.nutrients
     document = (
         f"[{kind}] {meal.name}. Serving {meal.serving}. "
@@ -147,23 +148,16 @@ async def upsert_meal(
         f"fat {n.fat_g}g, fiber {n.fiber_g}g, sugar {n.sugar_g}g, sodium {n.sodium_mg}mg. "
         f"Source {source}. Raw: {meal.raw_text[:500]}"
     )
-    embedding = (await _embed_texts([document]))[0]
-    doc_id = f"intake-{intake_id}"
-    row = {
-        "id": doc_id,
-        "document": document,
-        "embedding": embedding,
-        "metadata": {
-            "user_id": user_id,
-            "intake_id": intake_id,
+    return await vector_store.upsert_meal(
+        intake_id=intake_id,
+        user_id=user_id,
+        document=document,
+        metadata={
             "source": source,
             "kind": kind,
             "name": meal.name,
         },
-    }
-    rows = [r for r in _load_rows() if r.get("id") != doc_id]
-    rows.append(row)
-    _rewrite(rows)
+    )
 
 
 async def search(
