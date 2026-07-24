@@ -87,6 +87,31 @@ export interface UserProfile {
   streakDays: number;
 }
 
+/** Values extracted from a scanned drink nutrition label (per serving). */
+export interface ExtractedDrink {
+  productName: string;
+  servingSizeMl: number;
+  servingsPerContainer: number;
+  caloriesPerServing: number;
+  carbs_g: number;
+  totalSugar_g: number;
+  addedSugar_g: number;
+  caffeine_mg?: number;
+  confidence: Confidence;
+  /** Field keys the OCR was less sure about — highlighted for the user. */
+  lowConfidenceFields: string[];
+}
+
+/** A saved meal/drink the user can re-log quickly. */
+export interface Favorite {
+  id: string;
+  type: EntryType;
+  name: string;
+  portion?: string;
+  volumeMl?: number;
+  nutrients: Nutrients;
+}
+
 /** Aggregated totals for a single day. */
 export interface DailyTotals {
   /** ISO date (YYYY-MM-DD). */
