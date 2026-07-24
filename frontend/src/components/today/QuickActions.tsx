@@ -15,32 +15,31 @@ interface Action {
   iconColor: string;
 }
 
-// All routes point at /scan for now; the dedicated flows land in later phases.
 const actions: Action[] = [
   {
     label: "Scan food",
-    href: "/scan",
+    href: "/scan/food",
     icon: UtensilsIcon,
     iconBg: "bg-teal-t",
     iconColor: "text-teal-d",
   },
   {
     label: "Scan drink",
-    href: "/scan",
+    href: "/scan/drink",
     icon: CupIcon,
     iconBg: "bg-blue-t",
     iconColor: "text-blue-d",
   },
   {
     label: "Add manually",
-    href: "/scan",
+    href: "/scan/manual",
     icon: PlusIcon,
     iconBg: "bg-navy/[0.06]",
     iconColor: "text-navy",
   },
   {
     label: "Add water",
-    href: "/scan",
+    href: "/scan/manual",
     icon: DropletIcon,
     iconBg: "bg-blue-t",
     iconColor: "text-blue-d",
