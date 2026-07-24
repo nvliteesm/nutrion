@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 
 
 class InputType(str, Enum):
-    photo = "photo"
+    food = "food"
+    drink = "drink"
     document = "document"
-    chat = "chat"
 
 
 class NutrientValues(BaseModel):
@@ -31,12 +31,15 @@ class ExtractedMeal(BaseModel):
     source: str = "extractor"
 
 
-class OrchestrateResponse(BaseModel):
+class IngestResponse(BaseModel):
     input_type: InputType
     meal: Optional[ExtractedMeal] = None
     intake_id: Optional[int] = None
     message: str
-    chat_answer: Optional[str] = None
+
+
+# Back-compat alias
+OrchestrateResponse = IngestResponse
 
 
 class ChatRequest(BaseModel):
