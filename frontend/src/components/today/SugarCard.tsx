@@ -1,5 +1,26 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, ProgressBar, StatusPill } from "@/components/ui";
 import type { DailyStatus } from "@/lib/types";
+
+interface TopSource {
+  name: string;
+  percent: number;
+}
+
+async function fetchTopSource(): Promise<TopSource | null> {
+  try {
+    const res = await fetch("/api/analytics/top-sugar-sources?user_id=default&drinks_only=false&limit=1");
+    if (!res.ok) return null;
+    const data = await res.json();
+    const item = data?.items?.[0];
+    if (!item) return null;
+    return { name: item.name, percent: Math.round(item.percent_of_period_sugar) };
+  } catch {
+    return null;
+  }
+}
 
 export function SugarCard({
   sugar,
@@ -8,6 +29,12 @@ export function SugarCard({
   sugar: number;
   target: number;
 }) {
+  const [topSource, setTopSource] = useState<TopSource | null>(null);
+
+  useEffect(() => {
+    fetchTopSource().then(setTopSource);
+  }, []);
+
   const left = target - sugar;
   const status: DailyStatus =
     sugar > target ? "above" : sugar >= target * 0.85 ? "approaching" : "within";
@@ -44,6 +71,13 @@ export function SugarCard({
       <div className={`mt-1.5 text-[10.5px] font-semibold ${textFor(status)}`}>
         {summary}
       </div>
+
+      {topSource && (
+        <div className="mt-2 text-[10.5px] font-medium text-ink-3">
+          Top source: <span className="font-semibold text-ink-2">{topSource.name}</span>{" "}
+          ({topSource.percent}% this week)
+        </div>
+      )}
     </Card>
   );
 }
