@@ -86,10 +86,11 @@ async def upsert_meal(
     user_id: str,
     intake_id: int,
     source: str,
+    kind: str = "food",
 ) -> None:
     n = meal.nutrients
     document = (
-        f"{meal.name}. Serving {meal.serving}. "
+        f"[{kind}] {meal.name}. Serving {meal.serving}. "
         f"Calories {n.calories}, protein {n.protein_g}g, carbs {n.carbs_g}g, "
         f"fat {n.fat_g}g, fiber {n.fiber_g}g, sugar {n.sugar_g}g, sodium {n.sodium_mg}mg. "
         f"Source {source}. Raw: {meal.raw_text[:500]}"
@@ -104,6 +105,7 @@ async def upsert_meal(
             "user_id": user_id,
             "intake_id": intake_id,
             "source": source,
+            "kind": kind,
             "name": meal.name,
         },
     }

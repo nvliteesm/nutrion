@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     azure_content_analyzer: str = "prebuilt-layout"
     azure_content_api_version: str = "2025-11-01"
 
+    # Kimi / Moonshot Vision — food photo analysis
+    kimi_api_key: str = ""
+    kimi_base_url: str = "https://api.moonshot.ai/v1"
+    kimi_vision_model: str = "kimi-k3"
+
     use_live_ai: bool = True
 
     @property
@@ -59,6 +64,14 @@ class Settings(BaseSettings):
     @property
     def content_understanding_enabled(self) -> bool:
         return self.has_content_key and bool(self.azure_content_endpoint.strip())
+
+    @property
+    def has_kimi_key(self) -> bool:
+        return bool(self.kimi_api_key.strip())
+
+    @property
+    def kimi_vision_enabled(self) -> bool:
+        return self.use_live_ai and self.has_kimi_key
 
     @property
     def openai_api_key(self) -> str:

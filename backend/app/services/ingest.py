@@ -1,3 +1,12 @@
+"""
+Ingestion entrypoints → processing → dual storage.
+
+Stages:
+  1. ingest_*   save upload
+  2. processing process_food | process_drink | process_document
+  3. storage    Structured DB + Vector DB
+"""
+
 from __future__ import annotations
 
 import logging
@@ -7,8 +16,9 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.schemas import ExtractedMeal, InputType, IngestResponse
-from app.services import document_parser, extractor, food_detect, ocr, structured_store, vector_store
+from app.models.schemas import IngestResponse
+from app.services import processing, structured_store, vector_store
+from app.services.pipeline import IngestedFile, ProcessResult, StorageResult
 
 logger = logging.getLogger(__name__)
 
@@ -21,41 +31,60 @@ def _save_upload(file_bytes: bytes, filename: str) -> Path:
     return dest
 
 
-async def _persist_meal(
+async def _store(
     session: AsyncSession,
+    result: ProcessResult,
     *,
-    meal: ExtractedMeal,
     user_id: str,
-    source: str,
-    input_type: InputType,
-    persist: bool = True,
+    persist: bool,
 ) -> IngestResponse:
     intake_id: int | None = None
+    storage: StorageResult | None = None
 
     if persist:
         row = await structured_store.save_intake(
             session,
-            meal,
+            result.meal,
             user_id=user_id,
-            source=source,
+            source=result.meal.source or result.processor,
+            kind=result.kind,
+            file_path=result.file_path,
         )
         intake_id = row.id
+        vector_ok = True
+        vector_error = None
         try:
             await vector_store.upsert_meal(
-                meal,
+                result.meal,
                 user_id=user_id,
                 intake_id=row.id,
-                source=source,
+                source=result.meal.source or result.processor,
+                kind=result.kind,
             )
-        except Exception:
+        except Exception as exc:
+            vector_ok = False
+            vector_error = str(exc)
             logger.exception("Vector upsert failed for intake %s", row.id)
-        message = f"Ingested '{meal.name}' via {source} (intake #{row.id})."
+        storage = StorageResult(
+            intake_id=row.id,
+            structured_ok=True,
+            vector_ok=vector_ok,
+            vector_error=vector_error,
+        )
+        message = (
+            f"[{result.kind}] processed via {result.processor}; "
+            f"stored intake #{row.id}"
+            + ("" if vector_ok else f" (vector warn: {vector_error})")
+        )
     else:
-        message = f"Parsed '{meal.name}' via {source} (not persisted)."
+        message = f"[{result.kind}] processed via {result.processor} (not persisted)"
+
+    if result.warnings:
+        message += " | " + "; ".join(result.warnings)
 
     return IngestResponse(
-        input_type=input_type,
-        meal=meal,
+        input_type=result.input_type,
+        meal=result.meal,
         intake_id=intake_id,
         message=message,
     )
@@ -69,20 +98,12 @@ async def run_drink(
     user_id: str = "default",
     persist: bool = True,
 ) -> IngestResponse:
-    """Drink label photo → OCR only → nutrient extract."""
     if not file_bytes or not filename:
         raise ValueError("Drink OCR requires an uploaded image file")
-    dest = _save_upload(file_bytes, filename)
-    raw_text = await ocr.extract_text_from_image(dest)
-    meal = await extractor.extract_nutrients(raw_text, source="drink_ocr")
-    return await _persist_meal(
-        session,
-        meal=meal,
-        user_id=user_id,
-        source="drink_ocr",
-        input_type=InputType.drink,
-        persist=persist,
-    )
+    path = _save_upload(file_bytes, filename)
+    item = IngestedFile(path=path, filename=filename, kind="drink", user_id=user_id)
+    result = await processing.process_drink(item)
+    return await _store(session, result, user_id=user_id, persist=persist)
 
 
 async def run_food(
@@ -93,19 +114,12 @@ async def run_food(
     user_id: str = "default",
     persist: bool = True,
 ) -> IngestResponse:
-    """Food photo → AI detection (no OCR) → nutrient estimate."""
     if not file_bytes or not filename:
         raise ValueError("Food detection requires an uploaded image file")
-    dest = _save_upload(file_bytes, filename)
-    meal = await food_detect.detect_food(dest)
-    return await _persist_meal(
-        session,
-        meal=meal,
-        user_id=user_id,
-        source=meal.source or "food_ai",
-        input_type=InputType.food,
-        persist=persist,
-    )
+    path = _save_upload(file_bytes, filename)
+    item = IngestedFile(path=path, filename=filename, kind="food", user_id=user_id)
+    result = await processing.process_food(item)
+    return await _store(session, result, user_id=user_id, persist=persist)
 
 
 async def run_document(
@@ -116,22 +130,13 @@ async def run_document(
     user_id: str = "default",
     persist: bool = True,
 ) -> IngestResponse:
-    """PDF/txt → document parser → nutrient extract."""
     if not file_bytes or not filename:
         raise ValueError("Document parser requires an uploaded file")
-    dest = _save_upload(file_bytes, filename)
-    raw_text = await document_parser.parse_document(dest)
-    meal = await extractor.extract_nutrients(raw_text, source="document")
-    return await _persist_meal(
-        session,
-        meal=meal,
-        user_id=user_id,
-        source="document",
-        input_type=InputType.document,
-        persist=persist,
-    )
+    path = _save_upload(file_bytes, filename)
+    item = IngestedFile(path=path, filename=filename, kind="document", user_id=user_id)
+    result = await processing.process_document(item)
+    return await _store(session, result, user_id=user_id, persist=persist)
 
 
-# Back-compat name used by older callers
 async def run_ocr(*args, **kwargs) -> IngestResponse:
     return await run_drink(*args, **kwargs)

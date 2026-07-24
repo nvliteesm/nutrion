@@ -23,11 +23,11 @@ export type Confidence = "high" | "medium" | "low";
 
 /** Daily target status, drives the calendar colours and dashboard pills. */
 export type DailyStatus =
-  | "within" // green
-  | "approaching" // teal/amber-ish, close to target
-  | "above" // over target
-  | "incomplete" // logged, but partial day
-  | "no_data"; // nothing logged
+  | "within"
+  | "approaching"
+  | "above"
+  | "incomplete"
+  | "no_data";
 
 export type Subscription = "free" | "premium";
 
@@ -158,4 +158,130 @@ export interface DailyTotals {
   entryCount: number;
   confirmedCount: number;
   status: DailyStatus;
+}
+
+export type ConfirmationStatus = "pending" | "confirmed" | "rejected";
+export type MetricStatus = "high" | "normal" | "low" | "unknown";
+export type MedicalCategory = "blood_sugar" | "lipid_profile" | "other";
+export type ScanMode = "drink" | "food" | "medical";
+
+/** Supported medical report metrics only (Blood Sugar + Lipid Profile). */
+export const MEDICAL_METRIC_GROUPS = [
+  {
+    category: "blood_sugar" as const,
+    title: "Blood Sugar",
+    metrics: ["HbA1c", "Fasting Blood Glucose"] as const,
+  },
+  {
+    category: "lipid_profile" as const,
+    title: "Lipid Profile",
+    metrics: [
+      "Total Cholesterol",
+      "LDL",
+      "HDL",
+      "Triglycerides",
+    ] as const,
+  },
+] as const;
+
+export interface DrinkLabelData {
+  product_name: string;
+  serving_size: string;
+  servings_per_container: number | null;
+  calories: number;
+  carbohydrates_g: number;
+  total_sugar_g: number;
+  added_sugar_g: number;
+  drink_volume_ml: number | null;
+  sodium_mg: number | null;
+  caffeine_mg: number | null;
+  confidence: number;
+  confirmation_status: ConfirmationStatus;
+  raw_text: string;
+}
+
+export interface DrinkAnalyzeResponse {
+  analysis_id: string;
+  drink: DrinkLabelData;
+  message: string;
+}
+
+export interface DrinkConfirmResponse {
+  analysis_id: string;
+  intake_id: number;
+  drink: DrinkLabelData;
+  message: string;
+}
+
+export interface FoodItemEstimate {
+  name: string;
+  portion: string;
+  portion_grams: number | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sugar_g: number;
+  sodium_mg: number;
+  calories_low: number | null;
+  calories_high: number | null;
+  confidence: number;
+}
+
+export interface FoodAnalysisData {
+  items: FoodItemEstimate[];
+  total_calories: number;
+  total_protein_g: number;
+  total_carbs_g: number;
+  total_fat_g: number;
+  total_fiber_g: number;
+  total_sugar_g: number;
+  total_sodium_mg: number;
+  confidence: number;
+  confirmation_status: ConfirmationStatus;
+  description: string;
+  raw_text: string;
+}
+
+export interface FoodAnalyzeResponse {
+  analysis_id: string;
+  food: FoodAnalysisData;
+  message: string;
+}
+
+export interface FoodConfirmResponse {
+  analysis_id: string;
+  intake_id: number;
+  food: FoodAnalysisData;
+  message: string;
+}
+
+export interface MedicalMetricData {
+  metric_name: string;
+  category: MedicalCategory;
+  value: number;
+  unit: string;
+  reference_min: number | null;
+  reference_max: number | null;
+  reference_range_text: string;
+  status: MetricStatus;
+  test_date: string | null;
+  source_page: number | null;
+  extraction_confidence: number;
+  confirmed: boolean;
+}
+
+export interface MedicalAnalyzeResponse {
+  analysis_id: string;
+  metrics: MedicalMetricData[];
+  raw_text: string;
+  message: string;
+}
+
+export interface MedicalConfirmResponse {
+  analysis_id: string;
+  metric_ids: number[];
+  metrics: MedicalMetricData[];
+  message: string;
 }

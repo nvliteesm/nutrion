@@ -33,19 +33,21 @@ class AzureOpenAIClient:
         system: str,
         user: str,
         *,
-        temperature: float = 0.1,
+        temperature: float | None = 0.1,
     ) -> dict[str, Any] | None:
         if not self.enabled:
             return None
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.chat_model,
-            "temperature": temperature,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
         }
+        # Some Azure deployments (e.g. gpt-5-mini) only allow default temperature.
+        if temperature is not None:
+            payload["temperature"] = temperature
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
@@ -53,6 +55,17 @@ class AzureOpenAIClient:
                     headers=self._headers(),
                     json=payload,
                 )
+                if (
+                    resp.status_code >= 400
+                    and "temperature" in (resp.text or "").lower()
+                    and "temperature" in payload
+                ):
+                    payload.pop("temperature", None)
+                    resp = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=self._headers(),
+                        json=payload,
+                    )
                 if resp.status_code >= 400:
                     logger.error("Azure chat_json %s: %s", resp.status_code, resp.text[:500])
                     resp.raise_for_status()

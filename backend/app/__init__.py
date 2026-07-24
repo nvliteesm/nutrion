@@ -1,1 +1,1 @@
-"""Nutrion backend — OCR + document ingestion API."""
+"""Nutrion backend — data ingestion, processing, and storage API."""

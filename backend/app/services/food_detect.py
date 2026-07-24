@@ -1,21 +1,46 @@
+"""Food image → Vision LLM → detected items + estimated portions."""
+
 from __future__ import annotations
 
 import base64
 import logging
 from pathlib import Path
 
-from app.models.schemas import ExtractedMeal, NutrientValues
-from app.services.azure_client import azure_client
-from app.services.extractor import stub_extract
+from app.models.schemas import (
+    ConfirmationStatus,
+    ExtractedMeal,
+    FoodAnalysisData,
+    FoodItemEstimate,
+    NutrientValues,
+)
+from app.services.kimi_client import kimi_client
 
 logger = logging.getLogger(__name__)
 
-FOOD_DETECT_SYSTEM = """You identify food in a photo and estimate nutrition for one serving.
-Return JSON with keys:
-name (string), serving (string), confidence (0-1),
-calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg (numbers),
-description (short string of what you see).
-Estimate reasonably if exact values are unknown. Use 0 only when truly unknown."""
+FOOD_DETECT_SYSTEM = """You identify food in a photo and estimate nutrition.
+Return JSON:
+{
+  "description": "short scene description",
+  "confidence": 0-1,
+  "items": [
+    {
+      "name": string,
+      "portion": "human readable portion e.g. 1 cup / 150g",
+      "portion_grams": number|null,
+      "calories": number,
+      "protein_g": number,
+      "carbs_g": number,
+      "fat_g": number,
+      "fiber_g": number,
+      "sugar_g": number,
+      "sodium_mg": number,
+      "calories_low": number|null,
+      "calories_high": number|null,
+      "confidence": 0-1
+    }
+  ]
+}
+Detect multiple items when present. Estimate reasonably if exact values are unknown."""
 
 
 def _mime_for(path: Path) -> str:
@@ -30,59 +55,179 @@ def _mime_for(path: Path) -> str:
     }.get(ext, "image/jpeg")
 
 
-def stub_food_from_image(path: Path) -> ExtractedMeal:
+def _totals(items: list[FoodItemEstimate]) -> dict[str, float]:
+    return {
+        "total_calories": sum(i.calories for i in items),
+        "total_protein_g": sum(i.protein_g for i in items),
+        "total_carbs_g": sum(i.carbs_g for i in items),
+        "total_fat_g": sum(i.fat_g for i in items),
+        "total_fiber_g": sum(i.fiber_g for i in items),
+        "total_sugar_g": sum(i.sugar_g for i in items),
+        "total_sodium_mg": sum(i.sodium_mg for i in items),
+    }
+
+
+def _item_from_dict(data: dict) -> FoodItemEstimate:
+    def f(key: str, default: float = 0.0) -> float:
+        try:
+            return float(data.get(key) if data.get(key) is not None else default)
+        except (TypeError, ValueError):
+            return default
+
+    def opt_f(key: str) -> float | None:
+        val = data.get(key)
+        if val is None or val == "":
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    return FoodItemEstimate(
+        name=str(data.get("name") or "Food item")[:120],
+        portion=str(data.get("portion") or "1 serving")[:80],
+        portion_grams=opt_f("portion_grams"),
+        calories=f("calories"),
+        protein_g=f("protein_g"),
+        carbs_g=f("carbs_g"),
+        fat_g=f("fat_g"),
+        fiber_g=f("fiber_g"),
+        sugar_g=f("sugar_g"),
+        sodium_mg=f("sodium_mg"),
+        calories_low=opt_f("calories_low"),
+        calories_high=opt_f("calories_high"),
+        confidence=f("confidence", 0.5),
+    )
+
+
+def stub_food_analysis(path: Path) -> FoodAnalysisData:
     name = path.stem.replace("_", " ").replace("-", " ")
     parts = name.split(" ", 1)
     if len(parts) == 2 and len(parts[0]) >= 16:
         name = parts[1]
-    name = name.strip() or "Unknown food"
-    # Heuristic placeholder estimates until Azure vision deployment works
+    name = (name.strip() or "Unknown food").title()
+    item = FoodItemEstimate(
+        name=name,
+        portion="1 serving",
+        portion_grams=250,
+        calories=350,
+        protein_g=20,
+        carbs_g=35,
+        fat_g=12,
+        fiber_g=4,
+        sugar_g=8,
+        sodium_mg=400,
+        calories_low=300,
+        calories_high=400,
+        confidence=0.4,
+    )
+    totals = _totals([item])
     raw = (
         f"Food photo detected (stub AI): {name}\n"
         f"Estimated nutrients for 1 serving.\n"
         f"Calories 350 Protein 20g Carbs 35g Fat 12g Fiber 4g Sugars 8g Sodium 400mg"
     )
-    meal = stub_extract(raw, source="food_ai_stub")
-    meal.name = name.title()
-    meal.confidence = 0.4
-    meal.source = "food_ai_stub"
-    meal.raw_text = raw
-    return meal
+    return FoodAnalysisData(
+        items=[item],
+        confidence=0.4,
+        confirmation_status=ConfirmationStatus.pending,
+        description=f"Stub estimate for {name}",
+        raw_text=raw,
+        **totals,
+    )
 
 
-async def detect_food(path: Path | str) -> ExtractedMeal:
-    """AI food detection from image (Account B vision). Falls back to stub."""
+def stub_food_from_image(path: Path) -> ExtractedMeal:
+    """Back-compat for legacy ingest pipeline."""
+    analysis = stub_food_analysis(path)
+    item = analysis.items[0] if analysis.items else FoodItemEstimate(name="Unknown food")
+    return ExtractedMeal(
+        name=item.name,
+        serving=item.portion,
+        nutrients=NutrientValues(
+            calories=item.calories,
+            protein_g=item.protein_g,
+            carbs_g=item.carbs_g,
+            fat_g=item.fat_g,
+            fiber_g=item.fiber_g,
+            sugar_g=item.sugar_g,
+            sodium_mg=item.sodium_mg,
+        ),
+        raw_text=analysis.raw_text,
+        confidence=item.confidence,
+        source="food_ai_stub",
+    )
+
+
+async def analyze_food_image(path: Path | str) -> FoodAnalysisData:
+    """Vision LLM food estimate (pending confirmation) via Kimi Vision."""
     path = Path(path)
 
-    if azure_client.enabled:
+    if kimi_client.enabled:
         b64 = base64.b64encode(path.read_bytes()).decode("ascii")
-        data = await azure_client.vision_json(
+        data = await kimi_client.vision_json(
             system=FOOD_DETECT_SYSTEM,
-            user_text="Identify the food and estimate nutrients for one serving.",
+            user_text="Identify foods and estimate portions + nutrients.",
             image_b64=b64,
             mime=_mime_for(path),
         )
-        if data:
-            nutrients = NutrientValues(
-                calories=float(data.get("calories") or 0),
-                protein_g=float(data.get("protein_g") or 0),
-                carbs_g=float(data.get("carbs_g") or 0),
-                fat_g=float(data.get("fat_g") or 0),
-                fiber_g=float(data.get("fiber_g") or 0),
-                sugar_g=float(data.get("sugar_g") or 0),
-                sodium_mg=float(data.get("sodium_mg") or 0),
-            )
+        if data and isinstance(data.get("items"), list) and data["items"]:
+            items = [
+                _item_from_dict(item)
+                for item in data["items"]
+                if isinstance(item, dict)
+            ]
+            if not items:
+                return stub_food_analysis(path)
+            confidences = [i.confidence for i in items]
+            avg_conf = sum(confidences) / len(confidences)
+            overall = float(data.get("confidence") or avg_conf)
+            totals = _totals(items)
             desc = str(data.get("description") or "").strip()
-            name = str(data.get("name") or "Detected food")[:120]
-            raw = desc or f"AI food detection: {name}"
-            return ExtractedMeal(
-                name=name,
-                serving=str(data.get("serving") or "1 serving"),
-                nutrients=nutrients,
-                raw_text=raw,
-                confidence=float(data.get("confidence") or 0.75),
-                source="food_ai",
+            raw_parts = [desc] if desc else []
+            for it in items:
+                raw_parts.append(
+                    f"{it.name} ({it.portion}): {it.calories} kcal, "
+                    f"P {it.protein_g}g C {it.carbs_g}g F {it.fat_g}g"
+                )
+            return FoodAnalysisData(
+                items=items,
+                confidence=overall,
+                confirmation_status=ConfirmationStatus.pending,
+                description=desc or f"Detected {len(items)} item(s)",
+                raw_text="\n".join(raw_parts),
+                **totals,
             )
-        logger.warning("Azure food vision unavailable; using stub detection")
+        logger.warning("Kimi food vision unavailable; using stub detection")
 
-    return stub_food_from_image(path)
+    return stub_food_analysis(path)
+
+
+async def detect_food(path: Path | str) -> ExtractedMeal:
+    """Legacy single-meal wrapper used by ingest pipeline."""
+    analysis = await analyze_food_image(path)
+    if not analysis.items:
+        return stub_food_from_image(Path(path))
+    item = analysis.items[0]
+    name = (
+        item.name
+        if len(analysis.items) == 1
+        else f"{item.name} + {len(analysis.items) - 1} more"
+    )
+    source = "food_ai_stub" if analysis.confidence <= 0.45 else "food_ai"
+    return ExtractedMeal(
+        name=name,
+        serving=item.portion if len(analysis.items) == 1 else f"{len(analysis.items)} items",
+        nutrients=NutrientValues(
+            calories=analysis.total_calories,
+            protein_g=analysis.total_protein_g,
+            carbs_g=analysis.total_carbs_g,
+            fat_g=analysis.total_fat_g,
+            fiber_g=analysis.total_fiber_g,
+            sugar_g=analysis.total_sugar_g,
+            sodium_mg=analysis.total_sodium_mg,
+        ),
+        raw_text=analysis.raw_text,
+        confidence=analysis.confidence,
+        source=source,
+    )

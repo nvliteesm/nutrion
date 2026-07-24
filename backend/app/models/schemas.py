@@ -9,6 +9,31 @@ class InputType(str, Enum):
     food = "food"
     drink = "drink"
     document = "document"
+    medical = "medical"
+
+
+class ConfirmationStatus(str, Enum):
+    pending = "pending"
+    confirmed = "confirmed"
+    rejected = "rejected"
+
+
+class MetricStatus(str, Enum):
+    high = "high"
+    normal = "normal"
+    low = "low"
+    unknown = "unknown"
+
+
+class MedicalCategory(str, Enum):
+    blood_sugar = "blood_sugar"
+    lipid_profile = "lipid_profile"
+    other = "other"
+
+
+# ---------------------------------------------------------------------------
+# Shared nutrient / meal models (legacy ingest)
+# ---------------------------------------------------------------------------
 
 
 class NutrientValues(BaseModel):
@@ -38,8 +63,165 @@ class IngestResponse(BaseModel):
     message: str
 
 
-# Back-compat alias
 OrchestrateResponse = IngestResponse
+
+
+# ---------------------------------------------------------------------------
+# Drink label (OCR → normalize → confirm)
+# ---------------------------------------------------------------------------
+
+
+class DrinkLabelData(BaseModel):
+    product_name: str = "Unknown drink"
+    serving_size: str = "1 serving"
+    servings_per_container: Optional[float] = None
+    calories: float = 0
+    carbohydrates_g: float = 0
+    total_sugar_g: float = 0
+    added_sugar_g: float = 0
+    drink_volume_ml: Optional[float] = None
+    sodium_mg: Optional[float] = None
+    caffeine_mg: Optional[float] = None
+    confidence: float = 0.5
+    confirmation_status: ConfirmationStatus = ConfirmationStatus.pending
+    raw_text: str = ""
+
+
+class DrinkAnalyzeResponse(BaseModel):
+    analysis_id: str
+    drink: DrinkLabelData
+    message: str = "Normalized OCR result ready for review"
+
+
+class DrinkConfirmRequest(BaseModel):
+    drink: DrinkLabelData
+    user_id: str = "default"
+
+
+class DrinkConfirmResponse(BaseModel):
+    analysis_id: str
+    intake_id: int
+    drink: DrinkLabelData
+    message: str = "Drink nutrition entry saved"
+
+
+# ---------------------------------------------------------------------------
+# Medical report parsing
+# ---------------------------------------------------------------------------
+
+
+class MedicalMetricData(BaseModel):
+    metric_name: str
+    category: MedicalCategory = MedicalCategory.other
+    value: float
+    unit: str = ""
+    reference_min: Optional[float] = None
+    reference_max: Optional[float] = None
+    reference_range_text: str = ""
+    status: MetricStatus = MetricStatus.unknown
+    test_date: Optional[date] = None
+    source_page: Optional[int] = None
+    extraction_confidence: float = 0.5
+    confirmed: bool = False
+
+
+class MedicalAnalyzeResponse(BaseModel):
+    analysis_id: str
+    metrics: list[MedicalMetricData]
+    raw_text: str = ""
+    message: str = "Blood sugar + lipid profile metrics extracted — review before saving"
+
+
+class MedicalConfirmRequest(BaseModel):
+    metrics: list[MedicalMetricData]
+    user_id: str = "default"
+
+
+class MedicalConfirmResponse(BaseModel):
+    analysis_id: str
+    metric_ids: list[int]
+    metrics: list[MedicalMetricData]
+    message: str = "Medical metrics saved"
+
+
+class MedicalMetricRecord(BaseModel):
+    id: int
+    user_id: str
+    analysis_id: str
+    metric_name: str
+    category: str
+    value: float
+    unit: str
+    reference_min: Optional[float] = None
+    reference_max: Optional[float] = None
+    reference_range_text: str = ""
+    status: str
+    test_date: Optional[date] = None
+    source_page: Optional[int] = None
+    extraction_confidence: float
+    confirmed: bool
+    file_path: str = ""
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Food image analysis (vision → estimate → confirm)
+# ---------------------------------------------------------------------------
+
+
+class FoodItemEstimate(BaseModel):
+    name: str
+    portion: str = "1 serving"
+    portion_grams: Optional[float] = None
+    calories: float = 0
+    protein_g: float = 0
+    carbs_g: float = 0
+    fat_g: float = 0
+    fiber_g: float = 0
+    sugar_g: float = 0
+    sodium_mg: float = 0
+    calories_low: Optional[float] = None
+    calories_high: Optional[float] = None
+    confidence: float = 0.5
+
+
+class FoodAnalysisData(BaseModel):
+    items: list[FoodItemEstimate] = Field(default_factory=list)
+    total_calories: float = 0
+    total_protein_g: float = 0
+    total_carbs_g: float = 0
+    total_fat_g: float = 0
+    total_fiber_g: float = 0
+    total_sugar_g: float = 0
+    total_sodium_mg: float = 0
+    confidence: float = 0.5
+    confirmation_status: ConfirmationStatus = ConfirmationStatus.pending
+    description: str = ""
+    raw_text: str = ""
+
+
+class FoodAnalyzeResponse(BaseModel):
+    analysis_id: str
+    food: FoodAnalysisData
+    message: str = "Food estimate ready for review"
+
+
+class FoodConfirmRequest(BaseModel):
+    food: FoodAnalysisData
+    user_id: str = "default"
+    name: Optional[str] = None
+
+
+class FoodConfirmResponse(BaseModel):
+    analysis_id: str
+    intake_id: int
+    food: FoodAnalysisData
+    message: str = "Estimated nutrition entry saved"
+
+
+# ---------------------------------------------------------------------------
+# Legacy / dashboard helpers
+# ---------------------------------------------------------------------------
 
 
 class ChatRequest(BaseModel):
@@ -103,10 +285,22 @@ class NotificationItem(BaseModel):
 class IntakeRecord(BaseModel):
     id: int
     user_id: str
+    kind: str = "food"
     name: str
+    serving: str = "1 serving"
     logged_at: datetime
     nutrients: NutrientValues
     source: str
+    confidence: float = 0.7
+    confirmed: bool = False
+    raw_text: str = ""
+    file_path: str = ""
+    analysis_id: str = ""
+
+
+class StorageStatus(BaseModel):
+    structured: dict[str, Any]
+    vector: dict[str, Any]
 
 
 class HealthResponse(BaseModel):

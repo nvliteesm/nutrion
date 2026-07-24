@@ -1,254 +1,689 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Card } from "@/components/ui";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import { Button, Card, ConfidenceBadge } from "@/components/ui";
 import {
-  ChevronRightIcon,
-  CupIcon,
-  FileTextIcon,
-  InfoIcon,
-  LockIcon,
-  PlusIcon,
-  SparkleIcon,
-  UtensilsIcon,
-} from "@/components/icons";
-import { getStoredSession } from "@/lib/auth";
-import type { Subscription } from "@/lib/types";
+  analyzeDrink,
+  analyzeFood,
+  analyzeMedical,
+  confirmDrink,
+  confirmFood,
+  confirmMedical,
+} from "@/lib/api";
+import { cn } from "@/lib/cn";
+import type {
+  Confidence,
+  DrinkLabelData,
+  FoodAnalysisData,
+  FoodItemEstimate,
+  MedicalMetricData,
+  ScanMode,
+} from "@/lib/types";
+import { MEDICAL_METRIC_GROUPS } from "@/lib/types";
+
+type Step = "pick" | "upload" | "review" | "done";
+
+function scoreToConfidence(score: number): Confidence {
+  if (score >= 0.75) return "high";
+  if (score >= 0.5) return "medium";
+  return "low";
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-semibold text-ink-2">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function inputClassName() {
+  return cn(
+    "w-full rounded-card-sm border border-line bg-white px-3 py-2.5 text-sm text-ink",
+    "outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20",
+  );
+}
+
+function NumberInput({
+  value,
+  onChange,
+  step = "any",
+  min,
+}: {
+  value: number | null | undefined;
+  onChange: (v: number | null) => void;
+  step?: string;
+  min?: number;
+}) {
+  return (
+    <input
+      type="number"
+      className={inputClassName()}
+      value={value ?? ""}
+      step={step}
+      min={min}
+      onChange={(e) => {
+        const raw = e.target.value;
+        onChange(raw === "" ? null : Number(raw));
+      }}
+    />
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <input
+      type="text"
+      className={inputClassName()}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+const modes: {
+  id: ScanMode;
+  title: string;
+  blurb: string;
+  accept: string;
+  accent: string;
+}[] = [
+  {
+    id: "drink",
+    title: "Drink label",
+    blurb: "OCR a nutrition facts label, then confirm before saving.",
+    accept: "image/*",
+    accent: "border-blue/30 bg-blue-t",
+  },
+  {
+    id: "food",
+    title: "Food photo",
+    blurb: "Vision estimate of items and portions — always editable.",
+    accept: "image/*",
+    accent: "border-teal/30 bg-teal-t",
+  },
+  {
+    id: "medical",
+    title: "Medical report",
+    blurb:
+      "Blood Sugar (HbA1c, Fasting Glucose) + Lipid Profile (TC, LDL, HDL, TG).",
+    accept: "image/*,.pdf,.txt,.md",
+    accent: "border-amber/30 bg-amber-t",
+  },
+];
 
 export default function ScanPage() {
-  // Reflect the signed-in account so Free users see the Premium lock.
-  const [subscription, setSubscription] = useState<Subscription>("free");
-  useEffect(() => {
-    const session = getStoredSession();
-    if (session) setSubscription(session.subscription);
-  }, []);
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const medicalLocked = subscription !== "premium";
+  const [step, setStep] = useState<Step>("pick");
+  const [mode, setMode] = useState<ScanMode | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
 
-  return (
-    <div className="flex flex-col">
-      <h1 className="text-[22px] font-extrabold tracking-tight text-ink md:text-[24px]">
-        Log something
-      </h1>
-      <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-ink-2 md:mb-1 md:text-[14px]">
-        Pick how you&rsquo;d like to add an entry. You&rsquo;ll always review the
-        numbers before anything is saved.
-      </p>
+  const [drink, setDrink] = useState<DrinkLabelData | null>(null);
+  const [food, setFood] = useState<FoodAnalysisData | null>(null);
+  const [metrics, setMetrics] = useState<MedicalMetricData[]>([]);
 
-      {/* Desktop: three primary cards */}
-      <div className="mt-5 hidden gap-4 md:grid md:grid-cols-3">
-        <PrimaryCard
-          href="/scan/drink"
-          icon={<CupIcon size={24} />}
-          iconClass="bg-blue-t text-blue-d"
-          title="Scan drink label"
-          badge={{ label: "MOST RELIABLE", tone: "teal" }}
-          description="Point at a nutrition-facts panel. We read the printed values, so results are accurate."
-          action="Open camera"
-        />
-        <PrimaryCard
-          href="/scan/food"
-          icon={<UtensilsIcon size={24} />}
-          iconClass="bg-teal-t text-teal-d"
-          title="Scan food"
-          badge={{ label: "ESTIMATE", tone: "amber" }}
-          description="Snap a plate of food. We estimate items and portions — you'll see a range, then review."
-          action="Open camera"
-        />
-        <PrimaryCard
-          href="/scan/medical"
-          icon={<FileTextIcon size={24} />}
-          iconClass="bg-navy/[0.06] text-navy"
-          title="Upload medical report"
-          premium
-          description="Add lab results (PDF or photo) for educational, nutrition-linked context. Confirmed by you."
-          action={medicalLocked ? "Unlock with Premium" : "Upload report"}
-          locked={medicalLocked}
-        />
-      </div>
-
-      {/* Desktop: manual entry, full width */}
-      <Link href="/scan/manual" className="mt-4 hidden md:block">
-        <Card className="flex items-center gap-4 p-5 transition-shadow hover:shadow-card-lg">
-          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-navy/[0.06] text-navy">
-            <PlusIcon size={24} />
-          </span>
-          <div className="flex-1">
-            <div className="text-[16px] font-bold text-ink">Enter manually</div>
-            <p className="mt-0.5 text-[13px] font-medium text-ink-2">
-              Type in food, a drink, or water yourself — with save-to-favorites
-              for fast re-logging.
-            </p>
-          </div>
-          <ChevronRightIcon size={20} className="text-ink-3" />
-        </Card>
-      </Link>
-
-      {/* Mobile: list of rows */}
-      <div className="mt-4 flex flex-col gap-3 md:hidden">
-        <MobileRow
-          href="/scan/drink"
-          icon={<CupIcon size={22} />}
-          iconClass="bg-blue-t text-blue-d"
-          title="Scan drink label"
-          badge={{ label: "RELIABLE", tone: "teal" }}
-          subtitle="Reads printed values"
-        />
-        <MobileRow
-          href="/scan/food"
-          icon={<UtensilsIcon size={22} />}
-          iconClass="bg-teal-t text-teal-d"
-          title="Scan food"
-          badge={{ label: "ESTIMATE", tone: "amber" }}
-          subtitle="Estimated range, then review"
-        />
-        <MobileRow
-          href="/scan/medical"
-          icon={<FileTextIcon size={22} />}
-          iconClass="bg-navy/[0.06] text-navy"
-          title="Upload medical report"
-          subtitle="Premium · educational context"
-          locked={medicalLocked}
-        />
-        <MobileRow
-          href="/scan/manual"
-          icon={<PlusIcon size={22} />}
-          iconClass="bg-navy/[0.06] text-navy"
-          title="Enter manually"
-          subtitle="Food, drink or water"
-        />
-      </div>
-
-      {/* Info banner */}
-      <div className="mt-5 flex items-start gap-2.5 rounded-card bg-blue-t px-4 py-3.5">
-        <InfoIcon size={18} className="mt-px shrink-0 text-blue-d" />
-        <p className="text-[11.5px] font-medium leading-relaxed text-blue-d md:text-[12.5px]">
-          Label scans read printed values and are the most accurate. Food photos
-          are estimates — always review and correct them before saving. NutriON
-          provides nutrition tracking and educational information; it does not
-          diagnose or replace professional healthcare advice.
-        </p>
-      </div>
-    </div>
+  const activeMode = useMemo(
+    () => modes.find((m) => m.id === mode) ?? null,
+    [mode],
   );
-}
 
-type BadgeInfo = { label: string; tone: "teal" | "amber" };
+  function resetAll() {
+    setStep("pick");
+    setMode(null);
+    setBusy(false);
+    setError(null);
+    setPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+    setAnalysisId(null);
+    setSavedId(null);
+    setDrink(null);
+    setFood(null);
+    setMetrics([]);
+    if (fileRef.current) fileRef.current.value = "";
+  }
 
-function badgeClass(tone: BadgeInfo["tone"]): string {
-  return tone === "teal" ? "bg-teal-t text-teal-d" : "bg-amber-t text-amber-d";
-}
+  function pickMode(next: ScanMode) {
+    setMode(next);
+    setStep("upload");
+    setError(null);
+  }
 
-function PrimaryCard({
-  href,
-  icon,
-  iconClass,
-  title,
-  badge,
-  premium,
-  description,
-  action,
-  locked,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  iconClass: string;
-  title: string;
-  badge?: BadgeInfo;
-  premium?: boolean;
-  description: string;
-  action: string;
-  locked?: boolean;
-}) {
+  async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !mode) return;
+
+    setBusy(true);
+    setError(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (file.type.startsWith("image/")) {
+      setPreviewUrl(URL.createObjectURL(file));
+    } else {
+      setPreviewUrl(null);
+    }
+
+    try {
+      if (mode === "drink") {
+        const res = await analyzeDrink(file);
+        setAnalysisId(res.analysis_id);
+        setDrink(res.drink);
+      } else if (mode === "food") {
+        const res = await analyzeFood(file);
+        setAnalysisId(res.analysis_id);
+        setFood(res.food);
+      } else {
+        const res = await analyzeMedical(file);
+        setAnalysisId(res.analysis_id);
+        setMetrics(res.metrics);
+      }
+      setStep("review");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Analyze failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onConfirm() {
+    if (!analysisId || !mode) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (mode === "drink" && drink) {
+        const res = await confirmDrink(analysisId, drink);
+        setSavedId(`intake #${res.intake_id}`);
+      } else if (mode === "food" && food) {
+        const res = await confirmFood(analysisId, food);
+        setSavedId(`intake #${res.intake_id}`);
+      } else if (mode === "medical") {
+        const res = await confirmMedical(analysisId, metrics);
+        setSavedId(`${res.metric_ids.length} metric(s)`);
+      }
+      setStep("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Confirm failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateFoodItem(index: number, patch: Partial<FoodItemEstimate>) {
+    setFood((prev) => {
+      if (!prev) return prev;
+      const items = prev.items.map((item, i) =>
+        i === index ? { ...item, ...patch } : item,
+      );
+      return {
+        ...prev,
+        items,
+        total_calories: items.reduce((s, i) => s + i.calories, 0),
+        total_protein_g: items.reduce((s, i) => s + i.protein_g, 0),
+        total_carbs_g: items.reduce((s, i) => s + i.carbs_g, 0),
+        total_fat_g: items.reduce((s, i) => s + i.fat_g, 0),
+        total_fiber_g: items.reduce((s, i) => s + i.fiber_g, 0),
+        total_sugar_g: items.reduce((s, i) => s + i.sugar_g, 0),
+        total_sodium_mg: items.reduce((s, i) => s + i.sodium_mg, 0),
+      };
+    });
+  }
+
+  function updateMetricByName(
+    name: string,
+    patch: Partial<MedicalMetricData>,
+  ) {
+    setMetrics((prev) =>
+      prev.map((m) => (m.metric_name === name ? { ...m, ...patch } : m)),
+    );
+  }
+
+  const medicalGroups = useMemo(() => {
+    return MEDICAL_METRIC_GROUPS.map((group) => ({
+      ...group,
+      items: group.metrics
+        .map((name) => metrics.find((m) => m.metric_name === name))
+        .filter((m): m is MedicalMetricData => Boolean(m)),
+    })).filter((g) => g.items.length > 0);
+  }, [metrics]);
+
   return (
-    <Link href={href}>
-      <Card className="relative flex h-full flex-col p-[22px] transition-shadow hover:shadow-card-lg">
-        {premium && (
-          <span className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-amber px-2 py-1 text-[9.5px] font-bold tracking-wide text-navy-ink">
-            <SparkleIcon size={10} />
-            PREMIUM
-          </span>
-        )}
-        <span
-          className={`mb-3.5 inline-flex h-12 w-12 items-center justify-center rounded-[14px] ${iconClass}`}
-        >
-          {icon}
-        </span>
-        <div className="mb-1.5 flex items-center gap-2">
-          <span className="text-[16px] font-bold text-ink">{title}</span>
-          {badge && (
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide ${badgeClass(badge.tone)}`}
+    <div className="mx-auto max-w-2xl space-y-5">
+      <header>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-3">
+          Log something
+        </p>
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-navy">
+          Scan & confirm
+        </h1>
+        <p className="mt-1.5 text-sm text-ink-2">
+          Upload → review the extracted result → save only what you confirm.
+        </p>
+      </header>
+
+      {error && (
+        <div className="rounded-card-sm border border-red/20 bg-red-t px-4 py-3 text-sm text-red-d">
+          {error}
+        </div>
+      )}
+
+      {step === "pick" && (
+        <div className="grid gap-3">
+          {modes.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => pickMode(m.id)}
+              className={cn(
+                "rounded-card-lg border px-5 py-4 text-left transition hover:shadow-card",
+                m.accent,
+              )}
             >
-              {badge.label}
-            </span>
-          )}
+              <div className="text-base font-extrabold text-navy">{m.title}</div>
+              <p className="mt-1 text-sm text-ink-2">{m.blurb}</p>
+            </button>
+          ))}
         </div>
-        <p className="mb-4 text-[13px] font-medium leading-relaxed text-ink-2">
-          {description}
-        </p>
-        <div
-          className={`mt-auto flex items-center justify-center gap-1.5 rounded-[11px] py-2.5 text-[13px] font-bold ${
-            locked
-              ? "bg-navy/[0.06] text-ink-2"
-              : "bg-navy text-white"
-          }`}
-        >
-          {locked && <LockIcon size={14} />}
-          {action}
-        </div>
-      </Card>
-    </Link>
-  );
-}
+      )}
 
-function MobileRow({
-  href,
-  icon,
-  iconClass,
-  title,
-  badge,
-  subtitle,
-  locked,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  iconClass: string;
-  title: string;
-  badge?: BadgeInfo;
-  subtitle: string;
-  locked?: boolean;
-}) {
-  return (
-    <Link href={href}>
-      <Card className="flex items-center gap-3.5 p-4">
-        <span
-          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[13px] ${iconClass}`}
-        >
-          {icon}
-        </span>
-        <div className="flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[15px] font-bold text-ink">{title}</span>
-            {badge && (
-              <span
-                className={`rounded-full px-1.5 py-0.5 text-[8px] font-bold ${badgeClass(badge.tone)}`}
-              >
-                {badge.label}
-              </span>
-            )}
+      {step === "upload" && activeMode && (
+        <Card className="space-y-4 p-5">
+          <div>
+            <h2 className="text-lg font-extrabold text-navy">{activeMode.title}</h2>
+            <p className="mt-1 text-sm text-ink-2">{activeMode.blurb}</p>
           </div>
-          <div className="mt-0.5 text-[11.5px] font-medium text-ink-2">
-            {subtitle}
+          <input
+            ref={fileRef}
+            type="file"
+            accept={activeMode.accept}
+            className="hidden"
+            onChange={onFileChange}
+          />
+          <Button
+            fullWidth
+            size="lg"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+          >
+            {busy ? "Analyzing…" : "Choose file"}
+          </Button>
+          <Button variant="ghost" fullWidth disabled={busy} onClick={resetAll}>
+            Back
+          </Button>
+        </Card>
+      )}
+
+      {step === "review" && (
+        <div className="space-y-4">
+          {previewUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={previewUrl}
+              alt="Upload preview"
+              className="max-h-52 w-full rounded-card-lg object-cover shadow-card"
+            />
+          )}
+
+          {mode === "drink" && drink && (
+            <Card className="space-y-4 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-extrabold text-navy">
+                  Drink label result
+                </h2>
+                <ConfidenceBadge confidence={scoreToConfidence(drink.confidence)} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Product name">
+                  <TextInput
+                    value={drink.product_name}
+                    onChange={(v) => setDrink({ ...drink, product_name: v })}
+                  />
+                </Field>
+                <Field label="Serving size">
+                  <TextInput
+                    value={drink.serving_size}
+                    onChange={(v) => setDrink({ ...drink, serving_size: v })}
+                  />
+                </Field>
+                <Field label="Servings per container">
+                  <NumberInput
+                    value={drink.servings_per_container}
+                    onChange={(v) =>
+                      setDrink({ ...drink, servings_per_container: v })
+                    }
+                  />
+                </Field>
+                <Field label="Drink volume (ml)">
+                  <NumberInput
+                    value={drink.drink_volume_ml}
+                    onChange={(v) => setDrink({ ...drink, drink_volume_ml: v })}
+                  />
+                </Field>
+                <Field label="Calories">
+                  <NumberInput
+                    value={drink.calories}
+                    onChange={(v) => setDrink({ ...drink, calories: v ?? 0 })}
+                  />
+                </Field>
+                <Field label="Carbohydrates (g)">
+                  <NumberInput
+                    value={drink.carbohydrates_g}
+                    onChange={(v) =>
+                      setDrink({ ...drink, carbohydrates_g: v ?? 0 })
+                    }
+                  />
+                </Field>
+                <Field label="Total sugar (g)">
+                  <NumberInput
+                    value={drink.total_sugar_g}
+                    onChange={(v) =>
+                      setDrink({ ...drink, total_sugar_g: v ?? 0 })
+                    }
+                  />
+                </Field>
+                <Field label="Added sugar (g)">
+                  <NumberInput
+                    value={drink.added_sugar_g}
+                    onChange={(v) =>
+                      setDrink({ ...drink, added_sugar_g: v ?? 0 })
+                    }
+                  />
+                </Field>
+                <Field label="Sodium (mg)">
+                  <NumberInput
+                    value={drink.sodium_mg}
+                    onChange={(v) => setDrink({ ...drink, sodium_mg: v })}
+                  />
+                </Field>
+                <Field label="Caffeine (mg)">
+                  <NumberInput
+                    value={drink.caffeine_mg}
+                    onChange={(v) => setDrink({ ...drink, caffeine_mg: v })}
+                  />
+                </Field>
+              </div>
+            </Card>
+          )}
+
+          {mode === "food" && food && (
+            <div className="space-y-3">
+              <Card className="flex items-center justify-between gap-3 p-5">
+                <div>
+                  <h2 className="text-lg font-extrabold text-navy">
+                    Food estimate
+                  </h2>
+                  <p className="mt-1 text-sm text-ink-2">
+                    {food.description || `${food.items.length} detected item(s)`}
+                  </p>
+                </div>
+                <ConfidenceBadge confidence={scoreToConfidence(food.confidence)} />
+              </Card>
+              {food.items.map((item, index) => (
+                <Card key={`${item.name}-${index}`} className="space-y-3 p-5">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Item name">
+                      <TextInput
+                        value={item.name}
+                        onChange={(v) => updateFoodItem(index, { name: v })}
+                      />
+                    </Field>
+                    <Field label="Portion">
+                      <TextInput
+                        value={item.portion}
+                        onChange={(v) => updateFoodItem(index, { portion: v })}
+                      />
+                    </Field>
+                    <Field label="Calories">
+                      <NumberInput
+                        value={item.calories}
+                        onChange={(v) =>
+                          updateFoodItem(index, { calories: v ?? 0 })
+                        }
+                      />
+                    </Field>
+                    <Field label="Protein (g)">
+                      <NumberInput
+                        value={item.protein_g}
+                        onChange={(v) =>
+                          updateFoodItem(index, { protein_g: v ?? 0 })
+                        }
+                      />
+                    </Field>
+                    <Field label="Carbs (g)">
+                      <NumberInput
+                        value={item.carbs_g}
+                        onChange={(v) =>
+                          updateFoodItem(index, { carbs_g: v ?? 0 })
+                        }
+                      />
+                    </Field>
+                    <Field label="Fat (g)">
+                      <NumberInput
+                        value={item.fat_g}
+                        onChange={(v) =>
+                          updateFoodItem(index, { fat_g: v ?? 0 })
+                        }
+                      />
+                    </Field>
+                    <Field label="Sugar (g)">
+                      <NumberInput
+                        value={item.sugar_g}
+                        onChange={(v) =>
+                          updateFoodItem(index, { sugar_g: v ?? 0 })
+                        }
+                      />
+                    </Field>
+                    <Field label="Sodium (mg)">
+                      <NumberInput
+                        value={item.sodium_mg}
+                        onChange={(v) =>
+                          updateFoodItem(index, { sodium_mg: v ?? 0 })
+                        }
+                      />
+                    </Field>
+                  </div>
+                </Card>
+              ))}
+              <Card className="p-4 text-sm text-ink-2">
+                Totals:{" "}
+                <span className="font-bold text-ink">
+                  {Math.round(food.total_calories)} kcal
+                </span>
+                {" · "}
+                {Math.round(food.total_carbs_g)}g carbs ·{" "}
+                {Math.round(food.total_sugar_g)}g sugar
+              </Card>
+            </div>
+          )}
+
+          {mode === "medical" && (
+            <div className="space-y-4">
+              <Card className="p-5">
+                <h2 className="text-lg font-extrabold text-navy">
+                  Extracted metrics
+                </h2>
+                <p className="mt-1 text-sm text-ink-2">
+                  Only Blood Sugar and Lipid Profile fields are extracted.
+                  Edit before saving.
+                </p>
+                <ul className="mt-3 grid gap-1 text-xs text-ink-3 sm:grid-cols-2">
+                  <li>
+                    <span className="font-bold text-ink-2">Blood Sugar:</span>{" "}
+                    HbA1c · Fasting Blood Glucose
+                  </li>
+                  <li>
+                    <span className="font-bold text-ink-2">Lipid Profile:</span>{" "}
+                    Total Cholesterol · LDL · HDL · Triglycerides
+                  </li>
+                </ul>
+              </Card>
+              {metrics.length === 0 && (
+                <Card className="p-5 text-sm text-ink-2">
+                  No supported metrics were found. Try a clearer report or PDF.
+                </Card>
+              )}
+              {medicalGroups.map((group) => (
+                <div key={group.category} className="space-y-3">
+                  <h3 className="px-1 text-xs font-bold uppercase tracking-[0.14em] text-ink-3">
+                    {group.title}
+                  </h3>
+                  {group.items.map((m) => (
+                    <Card
+                      key={m.metric_name}
+                      className="space-y-3 p-5"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-base font-extrabold text-navy">
+                          {m.metric_name}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase",
+                            m.status === "high" && "bg-red-t text-red-d",
+                            m.status === "low" && "bg-amber-t text-amber-d",
+                            m.status === "normal" && "bg-teal-t text-teal-d",
+                            m.status === "unknown" && "bg-app-bg text-ink-3",
+                          )}
+                        >
+                          {m.status}
+                        </span>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <Field label="Value">
+                          <NumberInput
+                            value={m.value}
+                            onChange={(v) =>
+                              updateMetricByName(m.metric_name, {
+                                value: v ?? 0,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Unit">
+                          <TextInput
+                            value={m.unit}
+                            onChange={(v) =>
+                              updateMetricByName(m.metric_name, { unit: v })
+                            }
+                          />
+                        </Field>
+                        <Field label="Test date">
+                          <input
+                            type="date"
+                            className={inputClassName()}
+                            value={m.test_date ?? ""}
+                            onChange={(e) =>
+                              updateMetricByName(m.metric_name, {
+                                test_date: e.target.value || null,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Ref min">
+                          <NumberInput
+                            value={m.reference_min}
+                            onChange={(v) =>
+                              updateMetricByName(m.metric_name, {
+                                reference_min: v,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Ref max">
+                          <NumberInput
+                            value={m.reference_max}
+                            onChange={(v) =>
+                              updateMetricByName(m.metric_name, {
+                                reference_max: v,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Reference text">
+                          <TextInput
+                            value={m.reference_range_text}
+                            onChange={(v) =>
+                              updateMetricByName(m.metric_name, {
+                                reference_range_text: v,
+                              })
+                            }
+                          />
+                        </Field>
+                      </div>
+                      <p className="text-xs text-ink-3">
+                        Confidence{" "}
+                        {(m.extraction_confidence * 100).toFixed(0)}%
+                        {m.source_page != null
+                          ? ` · page ${m.source_page}`
+                          : ""}
+                      </p>
+                    </Card>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              fullWidth
+              size="lg"
+              disabled={
+                busy ||
+                (mode === "medical" && metrics.length === 0) ||
+                (mode === "food" && (!food || food.items.length === 0))
+              }
+              onClick={onConfirm}
+            >
+              {busy ? "Saving…" : "Confirm & save"}
+            </Button>
+            <Button variant="outline" fullWidth disabled={busy} onClick={resetAll}>
+              Start over
+            </Button>
           </div>
         </div>
-        {locked ? (
-          <LockIcon size={16} className="text-amber-d" />
-        ) : (
-          <ChevronRightIcon size={18} className="text-ink-3" />
-        )}
-      </Card>
-    </Link>
+      )}
+
+      {step === "done" && (
+        <Card className="space-y-4 p-6 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal">
+            Saved
+          </p>
+          <h2 className="text-xl font-extrabold text-navy">
+            Entry confirmed
+          </h2>
+          <p className="text-sm text-ink-2">
+            Stored {savedId}. Only confirmed values feed your daily totals.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button fullWidth onClick={() => router.push("/today")}>
+              Go to Today
+            </Button>
+            <Button variant="outline" fullWidth onClick={resetAll}>
+              Log another
+            </Button>
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }
