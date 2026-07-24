@@ -1,5 +1,6 @@
 import { buildDailyTotals } from "./nutrition";
 import { groupByDate } from "./history";
+import { localDayKey } from "./date";
 import type { IntakeEntry, NutritionTargets } from "./types";
 
 /** Premium analytics derived from confirmed entries. */
@@ -33,7 +34,7 @@ function periodKeys(endIso: string, days: number): string[] {
 function inPeriod(entries: IntakeEntry[], endIso: string, days: number): IntakeEntry[] {
   const start = addDays(endIso, -(days - 1));
   return entries.filter((e) => {
-    const key = e.loggedAt.slice(0, 10);
+    const key = localDayKey(e.loggedAt);
     return key >= start && key <= endIso;
   });
 }
@@ -69,9 +70,9 @@ function afternoonSweetDrink(entries: IntakeEntry[], endIso: string): {
   let count = 0;
   for (const key of keys) {
     const has = entries.some((e) => {
-      if (e.loggedAt.slice(0, 10) !== key) return false;
+      if (localDayKey(e.loggedAt) !== key) return false;
       if (e.type !== "drink" || e.nutrients.addedSugar_g <= 0) return false;
-      const hour = Number(e.loggedAt.slice(11, 13));
+      const hour = new Date(e.loggedAt).getHours();
       return hour >= 15;
     });
     if (has) count += 1;

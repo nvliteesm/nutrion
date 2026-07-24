@@ -73,6 +73,22 @@ create table if not exists medical_reports (
 create index if not exists ix_medical_reports_user_id on medical_reports (user_id);
 create index if not exists ix_medical_reports_created_at on medical_reports (created_at);
 
+create table if not exists insights (
+  id serial primary key,
+  user_id varchar(128) not null default 'default',
+  kind varchar(48) not null,
+  title varchar(256) not null default '',
+  body text not null default '',
+  period_start timestamptz null,
+  period_end timestamptz null,
+  evidence_json text not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists ix_insights_user_id on insights (user_id);
+create index if not exists ix_insights_kind on insights (kind);
+create index if not exists ix_insights_created_at on insights (created_at);
+
 -- Easy-to-browse views in Table Editor
 create or replace view food_entries as
 select

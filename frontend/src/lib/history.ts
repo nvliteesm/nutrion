@@ -1,13 +1,14 @@
 import { buildDailyTotals } from "./nutrition";
+import { localDayKey } from "./date";
 import type {
   DailyTotals,
   IntakeEntry,
   NutritionTargets,
 } from "./types";
 
-/** Local YYYY-MM-DD for an entry. */
+/** Local YYYY-MM-DD for an entry (normalizes UTC + naive-local). */
 export function dateKey(entry: IntakeEntry): string {
-  return entry.loggedAt.slice(0, 10);
+  return localDayKey(entry.loggedAt);
 }
 
 /** Group entries by day. */

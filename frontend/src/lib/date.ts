@@ -21,3 +21,15 @@ export function getNowHHMM(): string {
 export function getNowISO(): string {
   return `${getToday()}T${getNowHHMM()}:00`;
 }
+
+/**
+ * Local calendar day (YYYY-MM-DD) for any timestamp.
+ * Normalizes both UTC ("...Z", from the backend) and naive-local strings
+ * (from local logging) to the user's local day, so grouping/filtering is
+ * consistent across both sources.
+ */
+export function localDayKey(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

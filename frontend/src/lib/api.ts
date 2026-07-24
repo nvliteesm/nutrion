@@ -1,30 +1,127 @@
 import { mockUser } from "./mock-data";
-import { getToday } from "./date";
+import { getToday, localDayKey } from "./date";
 import { getEntries } from "./store";
 import { buildDailyTotals } from "./nutrition";
-import type { DailyTotals, DrinkAnalyzeResponse, DrinkConfirmResponse, FoodAnalyzeResponse, FoodConfirmResponse, IntakeEntry, MedicalAnalyzeResponse, MedicalConfirmResponse, UserProfile } from "./types";
+import type {
+  Confidence,
+  DailyTotals,
+  DataSource,
+  DrinkAnalyzeResponse,
+  DrinkConfirmResponse,
+  EntryType,
+  FoodAnalyzeResponse,
+  FoodConfirmResponse,
+  IntakeEntry,
+  MedicalAnalyzeResponse,
+  MedicalConfirmResponse,
+  Nutrients,
+  UserProfile,
+} from "./types";
 import { getStoredSession } from "./auth";
 
 /**
  * API layer.
  *
- * Dashboard/history helpers read from the client-side store (localStorage)
- * so they reflect entries from both scan flows and manual logging.
- * When the backend is ready, swap the bodies for `fetch` calls.
+ * Reads merge two sources so the whole app shows a single unified history:
+ *   1. Backend intakes (Supabase, via the real scan/confirm flow) — source of truth.
+ *   2. Local entries (localStorage) — manual/quick logging + demo seed.
+ *
+ * If the backend is unreachable the app gracefully falls back to local data,
+ * so offline dev still works.
  */
 
-const delay = <T>(value: T, ms = 250): Promise<T> =>
-  new Promise((resolve) => setTimeout(() => resolve(value), ms));
+const targets = mockUser.targets;
 
-function isToday(entry: IntakeEntry): boolean {
-  return entry.loggedAt.slice(0, 10) === getToday();
+/** Shape of a backend IntakeRecord (see backend schemas.IntakeRecord). */
+interface BackendIntake {
+  id: number;
+  kind: string; // food | drink
+  name: string;
+  serving?: string;
+  logged_at: string;
+  source: string;
+  confidence: number;
+  confirmed: boolean;
+  nutrients: {
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+    fiber_g: number;
+    sugar_g: number;
+    sodium_mg: number;
+    extras?: Record<string, number>;
+  };
+}
+
+function mapSource(source: string): DataSource {
+  const s = (source || "").toLowerCase();
+  if (s.includes("ocr") || s.includes("label")) return "label";
+  if (s.includes("ai")) return "ai";
+  if (s.includes("manual")) return "manual";
+  return "database";
+}
+
+function mapConfidence(score: number): Confidence {
+  if (score >= 0.75) return "high";
+  if (score >= 0.5) return "medium";
+  return "low";
+}
+
+/** Adapt a backend intake row to the frontend IntakeEntry model. */
+function adaptBackendIntake(r: BackendIntake): IntakeEntry {
+  const extras = r.nutrients.extras ?? {};
+  const type: EntryType = r.kind === "drink" ? "drink" : "food";
+  const source = mapSource(r.source);
+  const nutrients: Nutrients = {
+    calories: r.nutrients.calories,
+    carbs_g: r.nutrients.carbs_g,
+    totalSugar_g: extras.total_sugar_g ?? r.nutrients.sugar_g,
+    addedSugar_g: extras.added_sugar_g ?? 0,
+    protein_g: r.nutrients.protein_g,
+    fat_g: r.nutrients.fat_g,
+    caffeine_mg: extras.caffeine_mg,
+  };
+  return {
+    id: `be_${r.id}`,
+    type,
+    name: r.name,
+    loggedAt: r.logged_at,
+    source,
+    confidence: source === "manual" ? undefined : mapConfidence(r.confidence),
+    confirmed: r.confirmed,
+    portion: r.serving,
+    volumeMl: extras.drink_volume_ml,
+    nutrients,
+  };
+}
+
+async function fetchBackendEntries(): Promise<IntakeEntry[]> {
+  try {
+    const res = await fetch("/intakes?limit=300");
+    if (!res.ok) return [];
+    const rows = (await res.json()) as BackendIntake[];
+    if (!Array.isArray(rows)) return [];
+    return rows.map(adaptBackendIntake);
+  } catch {
+    // Backend offline — fall back to local-only.
+    return [];
+  }
+}
+
+function mergeEntries(
+  backend: IntakeEntry[],
+  local: IntakeEntry[],
+): IntakeEntry[] {
+  return [...backend, ...local].sort((a, b) =>
+    a.loggedAt < b.loggedAt ? 1 : -1,
+  );
 }
 
 export function getCurrentUser(): Promise<UserProfile> {
-  // Read real session data, fall back to mockUser for seeded demo entries.
   const session = getStoredSession();
   if (session) {
-    return delay({
+    return Promise.resolve({
       ...mockUser,
       id: session.userId,
       fullName: session.fullName,
@@ -33,33 +130,31 @@ export function getCurrentUser(): Promise<UserProfile> {
       subscription: session.subscription,
     });
   }
-  return delay(mockUser);
+  return Promise.resolve(mockUser);
 }
 
-export function getTodayEntries(): Promise<IntakeEntry[]> {
-  return delay(getEntries().filter(isToday));
+/** All entries (backend + local), newest first. */
+export async function getAllEntries(): Promise<IntakeEntry[]> {
+  const backend = await fetchBackendEntries();
+  return mergeEntries(backend, getEntries());
 }
 
-export function getTodayTotals(): Promise<DailyTotals> {
-  const user = getStoredSession();
-  const targets = mockUser.targets; // targets from profile (TODO: persist edits)
-  const todays = getEntries().filter(isToday);
-  return delay(buildDailyTotals(getToday(), todays, targets));
+export async function getTodayEntries(): Promise<IntakeEntry[]> {
+  const today = getToday();
+  const all = await getAllEntries();
+  return all.filter((e) => localDayKey(e.loggedAt) === today);
 }
 
-/** All stored entries (for History / calendar / analytics). */
-export function getAllEntries(): Promise<IntakeEntry[]> {
-  return delay(getEntries());
+export async function getTodayTotals(): Promise<DailyTotals> {
+  const today = getToday();
+  const all = await getAllEntries();
+  const todays = all.filter((e) => localDayKey(e.loggedAt) === today);
+  return buildDailyTotals(today, todays, targets);
 }
 
-
-/**
- * Backend API stubs for the analyze → confirm flow.
- *
- * These hit the backend when available (via Next rewrites). The frontend
- * scan pages that still use local mock extractors don't call these; they
- * exist for the scan/page.tsx hub your teammate built.
- */
+// ---------------------------------------------------------------------------
+// Analyze → confirm flow (backend). Used by the /scan hub.
+// ---------------------------------------------------------------------------
 
 async function apiError(res: Response): Promise<never> {
   let detail = res.statusText;
