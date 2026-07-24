@@ -24,6 +24,7 @@ from app.models.schemas import (
     MedicalConfirmRequest,
     MedicalConfirmResponse,
     MedicalMetricRecord,
+    MedicalReportRecord,
     StorageStatus,
 )
 from app.services import analysis_store, confirm_flow, ingest, structured_store, vector_store
@@ -80,9 +81,20 @@ async def health(session: AsyncSession = Depends(get_session)) -> HealthResponse
                 "analyze_confirm": ["foods", "drinks", "medical"],
                 "ingestion": ["food", "drink", "document"],
                 "processing": ["food_ai", "ocr", "document_parser", "medical_extract"],
-                "storage": ["structured_db", "vector_db", "medical_metrics"],
+                "storage": ["structured_db", "vector_db", "medical_reports"],
             },
-            "structured_db": {"ok": True, "url": settings.database_url, **structured},
+            "structured_db": {
+                "ok": True,
+                "backend": "postgres" if settings.is_postgres else "sqlite",
+                "supabase": settings.uses_supabase,
+                "ssl": settings.ssl_enabled,
+                "url": (
+                    f"***@{settings.database_url.split('@', 1)[1]}"
+                    if "@" in settings.database_url
+                    else settings.database_url
+                ),
+                **structured,
+            },
             "vector_db": chroma,
             "knowledge_base": knowledge,
             "foundry": foundry_status,
@@ -383,7 +395,7 @@ async def medical_analyze(
 @api.get(
     "/medical/metrics",
     response_model=list[MedicalMetricRecord],
-    summary="List saved medical metrics",
+    summary="List latest metric values (expanded from reports)",
     tags=["medical"],
 )
 async def medical_metrics_list(
@@ -392,6 +404,24 @@ async def medical_metrics_list(
     session: AsyncSession = Depends(get_session),
 ) -> list[MedicalMetricRecord]:
     return await analysis_store.list_medical_metrics(
+        session,
+        user_id=user_id,
+        limit=min(limit, 200),
+    )
+
+
+@api.get(
+    "/medical/reports",
+    response_model=list[MedicalReportRecord],
+    summary="List medical reports (1 report = 1 row)",
+    tags=["medical"],
+)
+async def medical_reports_list(
+    user_id: Optional[str] = None,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session),
+) -> list[MedicalReportRecord]:
+    return await analysis_store.list_medical_reports(
         session,
         user_id=user_id,
         limit=min(limit, 200),

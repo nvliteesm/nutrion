@@ -36,7 +36,6 @@ def _save_upload(file_bytes: bytes, filename: str) -> Path:
 
 # ---- Drinks -----------------------------------------------------------------
 
-
 async def analyze_drink(
     session: AsyncSession,
     *,
@@ -303,6 +302,7 @@ async def confirm_medical(
     )
     return MedicalConfirmResponse(
         analysis_id=row.id,
-        metric_ids=[r.id for r in saved],
+        report_id=saved.id,
+        metric_ids=[saved.id],
         metrics=metrics,
     )

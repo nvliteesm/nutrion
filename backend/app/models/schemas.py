@@ -139,9 +139,10 @@ class MedicalConfirmRequest(BaseModel):
 
 class MedicalConfirmResponse(BaseModel):
     analysis_id: str
-    metric_ids: list[int]
+    report_id: int
+    metric_ids: list[int] = Field(default_factory=list)  # back-compat: [report_id]
     metrics: list[MedicalMetricData]
-    message: str = "Medical metrics saved"
+    message: str = "Medical report saved"
 
 
 class MedicalMetricRecord(BaseModel):
@@ -162,6 +163,33 @@ class MedicalMetricRecord(BaseModel):
     confirmed: bool
     file_path: str = ""
     created_at: datetime
+
+
+class MedicalReportRecord(BaseModel):
+    """One confirmed lab report = one row (easy to edit in Supabase)."""
+
+    id: int
+    user_id: str
+    analysis_id: str = ""
+    test_date: Optional[date] = None
+    file_path: str = ""
+    confidence: float = 0.5
+    confirmed: bool = True
+    notes: str = ""
+    hba1c: Optional[float] = None
+    hba1c_status: Optional[str] = None
+    fasting_glucose: Optional[float] = None
+    fasting_glucose_status: Optional[str] = None
+    total_cholesterol: Optional[float] = None
+    total_cholesterol_status: Optional[str] = None
+    ldl: Optional[float] = None
+    ldl_status: Optional[str] = None
+    hdl: Optional[float] = None
+    hdl_status: Optional[str] = None
+    triglycerides: Optional[float] = None
+    triglycerides_status: Optional[str] = None
+    created_at: datetime
+    metrics: list[MedicalMetricRecord] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
