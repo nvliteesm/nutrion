@@ -95,11 +95,7 @@ export default function TodayPage() {
   }
 
   return (
-<<<<<<< Updated upstream
-    <div className="flex flex-col gap-4 md:gap-5">
-=======
     <div className="flex animate-fade-up flex-col gap-3 md:gap-4">
->>>>>>> Stashed changes
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-extrabold tracking-tight text-ink md:text-[26px]">
@@ -131,17 +127,12 @@ export default function TodayPage() {
         </div>
       </header>
 
-<<<<<<< Updated upstream
-      <div className="grid items-stretch gap-4 md:grid-cols-2 md:gap-5">
+      <div className="grid items-stretch gap-3 md:grid-cols-2 md:gap-4">
         <SugarCard
           sugar={totals.totalSugar_g}
           target={user.targets.sugar_g}
           delay={0.05}
         />
-=======
-      <div className="grid items-stretch gap-3 md:grid-cols-2 md:gap-4">
-        <SugarCard sugar={totals.totalSugar_g} target={user.targets.sugar_g} />
->>>>>>> Stashed changes
         <HydrationCard
           ml={ml}
           targetCups={user.targets.water_cups}
@@ -152,26 +143,6 @@ export default function TodayPage() {
 
       <QuickActions delay={0.15} />
 
-<<<<<<< Updated upstream
-      <div className="grid items-start gap-4 md:grid-cols-2 md:gap-5">
-        <MonthCalendar
-          monthLabel={monthLabel}
-          cells={grid}
-          selectedIso={selectedIso}
-          todayIso={todayIso}
-          onSelect={setSelectedIso}
-          onPrev={() => stepMonth(-1)}
-          onNext={() => stepMonth(1)}
-          delay={0.28}
-        />
-        <DayDetail
-          dateIso={selectedIso}
-          entries={selectedEntries}
-          targets={user.targets}
-          onSelectEntry={setSelectedEntry}
-          delay={0.33}
-        />
-=======
       <div className="grid items-stretch gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:gap-4">
         <div className="min-w-0">
           <MonthCalendar
@@ -182,6 +153,7 @@ export default function TodayPage() {
             onSelect={setSelectedIso}
             onPrev={() => stepMonth(-1)}
             onNext={() => stepMonth(1)}
+            delay={0.28}
           />
         </div>
         <div className="min-w-0 md:h-full">
@@ -190,9 +162,9 @@ export default function TodayPage() {
             entries={selectedEntries}
             targets={user.targets}
             onSelectEntry={setSelectedEntry}
+            delay={0.33}
           />
         </div>
->>>>>>> Stashed changes
       </div>
 
       {selectedEntry && (

@@ -28,10 +28,13 @@ interface ToastOptions {
   variant?: ToastVariant;
   action?: ToastAction;
   duration?: number;
+  /** If set, replace any existing toast with the same id (no stacking). */
+  id?: string;
 }
 
-interface ToastItem extends ToastOptions {
+interface ToastItem extends Omit<ToastOptions, "id"> {
   id: number;
+  key?: string;
 }
 
 interface ToastContextValue {
@@ -58,19 +61,55 @@ const variantStyle: Record<ToastVariant, { icon: React.ReactNode; ring: string }
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const counter = useRef(0);
+  const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   const dismiss = useCallback((id: number) => {
-    setToasts((list) => list.filter((t) => t.id !== id));
+    const t = timers.current.get(id);
+    if (t) {
+      clearTimeout(t);
+      timers.current.delete(id);
+    }
+    setToasts((list) => list.filter((item) => item.id !== id));
   }, []);
 
   const toast = useCallback(
     (opts: ToastOptions) => {
-      const id = ++counter.current;
-      const item: ToastItem = { id, variant: "info", duration: 4000, ...opts };
-      setToasts((list) => [...list, item]);
-      if (item.duration && item.duration > 0) {
-        setTimeout(() => dismiss(id), item.duration);
-      }
+      const { id: replaceKey, ...rest } = opts;
+      const duration = rest.duration ?? 4000;
+
+      setToasts((list) => {
+        // Replace existing toast with the same key instead of stacking.
+        const without = replaceKey
+          ? list.filter((t) => {
+              if (t.key === replaceKey) {
+                const old = timers.current.get(t.id);
+                if (old) {
+                  clearTimeout(old);
+                  timers.current.delete(t.id);
+                }
+                return false;
+              }
+              return true;
+            })
+          : list;
+
+        const id = ++counter.current;
+        const item: ToastItem = {
+          id,
+          key: replaceKey,
+          variant: "info",
+          duration,
+          ...rest,
+        };
+
+        if (duration > 0) {
+          timers.current.set(
+            id,
+            setTimeout(() => dismiss(id), duration),
+          );
+        }
+        return [...without, item];
+      });
     },
     [dismiss],
   );

@@ -13,7 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <SideNav />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopNav />
-        <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-6">
+        <main className="w-full flex-1 px-4 pb-28 pt-5 md:px-6 md:pb-10 md:pt-6 lg:px-8">
           {children}
         </main>
         <BottomNav />

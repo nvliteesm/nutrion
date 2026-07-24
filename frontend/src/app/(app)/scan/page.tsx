@@ -27,6 +27,16 @@ import { MEDICAL_METRIC_GROUPS } from "@/lib/types";
 
 type Step = "pick" | "upload" | "review" | "done";
 
+/** Survives React Strict Mode remounts so resume=1 does not fall back to upload. */
+type ScanResumePayload = {
+  mode: ScanMode;
+  analysis_id: string;
+  drink?: DrinkLabelData;
+  food?: FoodAnalysisData;
+  metrics?: MedicalMetricData[];
+};
+let scanResumeCache: ScanResumePayload | null = null;
+
 function scoreToConfidence(score: number): Confidence {
   if (score >= 0.75) return "high";
   if (score >= 0.5) return "medium";
@@ -164,39 +174,37 @@ export default function ScanPage() {
 
     if (resume === "1") {
       try {
-        const raw = sessionStorage.getItem(SCAN_RESUME_KEY);
-        sessionStorage.removeItem(SCAN_RESUME_KEY);
-        if (raw) {
-          const data = JSON.parse(raw) as {
-            mode: ScanMode;
-            analysis_id: string;
-            drink?: DrinkLabelData;
-            food?: FoodAnalysisData;
-            metrics?: MedicalMetricData[];
-          };
-          if (data.mode === "drink" && data.drink) {
-            setMode("drink");
-            setAnalysisId(data.analysis_id);
-            setDrink(data.drink);
-            setStep("review");
-            return;
-          }
-          if (data.mode === "food" && data.food) {
-            setMode("food");
-            setAnalysisId(data.analysis_id);
-            setFood(data.food);
-            setStep("review");
-            return;
-          }
-          if (data.mode === "medical" && data.metrics) {
-            setMode("medical");
-            setAnalysisId(data.analysis_id);
-            setMetrics(data.metrics);
-            setStep("review");
-            return;
+        if (!scanResumeCache) {
+          const raw = sessionStorage.getItem(SCAN_RESUME_KEY);
+          if (raw) {
+            scanResumeCache = JSON.parse(raw) as ScanResumePayload;
+            sessionStorage.removeItem(SCAN_RESUME_KEY);
           }
         }
+        const data = scanResumeCache;
+        if (data?.mode === "drink" && data.drink) {
+          setMode("drink");
+          setAnalysisId(data.analysis_id);
+          setDrink(data.drink);
+          setStep("review");
+          return;
+        }
+        if (data?.mode === "food" && data.food) {
+          setMode("food");
+          setAnalysisId(data.analysis_id);
+          setFood(data.food);
+          setStep("review");
+          return;
+        }
+        if (data?.mode === "medical" && data.metrics) {
+          setMode("medical");
+          setAnalysisId(data.analysis_id);
+          setMetrics(data.metrics);
+          setStep("review");
+          return;
+        }
       } catch {
+        scanResumeCache = null;
         /* fall through to normal deep-link */
       }
     }
@@ -216,6 +224,7 @@ export default function ScanPage() {
   }, [step, fromGallery, busy]);
 
   function resetAll() {
+    scanResumeCache = null;
     setStep("pick");
     setMode(null);
     setBusy(false);

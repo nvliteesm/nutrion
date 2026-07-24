@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button } from "@/components/ui";
 import { Field } from "@/components/auth/Field";
-import { CupIcon, DropletIcon, UtensilsIcon, CheckIcon } from "@/components/icons";
+import {
+  ChevronLeftIcon,
+  CupIcon,
+  DropletIcon,
+  UtensilsIcon,
+  CheckIcon,
+} from "@/components/icons";
 import { addEntry, addFavorite, getFavorites } from "@/lib/store";
 import { getToday, getNowHHMM } from "@/lib/date";
 import { parseNonNegative } from "@/lib/nutrition";
@@ -163,8 +169,21 @@ export function ManualForm() {
 
   const tabFavorites = favorites.filter((f) => f.type === tab);
 
+  function goBack() {
+    if (window.history.length > 1) router.back();
+    else router.push("/today");
+  }
+
   return (
     <div>
+      <button
+        type="button"
+        onClick={goBack}
+        className="mb-3 inline-flex items-center gap-1 text-[13px] font-semibold text-ink-2 transition-colors hover:text-ink"
+      >
+        <ChevronLeftIcon size={16} />
+        Back
+      </button>
       <h1 className="mb-4 text-[22px] font-extrabold tracking-tight text-ink">
         Add manually
       </h1>
@@ -279,7 +298,7 @@ export function ManualForm() {
         )}
 
         <div className="mt-5 flex gap-2.5">
-          <Button variant="outline" onClick={() => router.push("/scan")}>
+          <Button variant="outline" onClick={goBack}>
             Cancel
           </Button>
           <Button fullWidth onClick={handleSave} disabled={!canSave || submitting}>

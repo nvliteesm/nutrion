@@ -34,109 +34,17 @@ export function SideNav() {
   }
 
   return (
-<<<<<<< Updated upstream
-    <aside
-      className={cn(
-        "relative sticky top-0 z-20 hidden h-screen shrink-0 flex-col border-r border-line bg-card py-5 transition-[width] duration-200 ease-out md:flex",
-        expanded ? "w-[220px] px-3" : "w-[72px] items-center px-1.5",
-      )}
-    >
-      <div className="mb-8 flex w-full items-center justify-center px-1">
-        <Link href="/today" aria-label="NutriON home">
-          {expanded ? <Logo /> : <Logo markOnly />}
-        </Link>
-      </div>
-
-      <nav
-        className={cn(
-          "flex flex-1 flex-col gap-1.5",
-          expanded ? "items-stretch" : "items-center",
-        )}
-      >
-        {navItems.map((item) => {
-          const active = pathname.startsWith(item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={item.label}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "inline-flex h-11 items-center rounded-[14px] transition-colors",
-                expanded ? "gap-3 px-3" : "w-11 justify-center",
-                active
-                  ? "bg-teal text-navy-ink shadow-float"
-                  : "text-ink-3 hover:bg-app-bg hover:text-ink",
-              )}
-            >
-              <Icon size={20} className="shrink-0" />
-              {expanded && (
-                <span className="truncate text-[13.5px] font-semibold">
-                  {item.label}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <Link
-        href="/profile"
-        className={cn(
-          "mt-2 inline-flex items-center rounded-full bg-teal/20 text-[12px] font-bold text-teal-d transition-colors hover:bg-teal/30",
-          expanded ? "h-10 gap-2.5 px-2.5" : "h-10 w-10 justify-center",
-        )}
-      >
-        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal/30">
-          {initials}
-        </span>
-        {expanded && <span>Profile</span>}
-      </Link>
-
-      {/* Toggle sits just outside the rail edge */}
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
-        aria-expanded={expanded}
-        title={expanded ? "Collapse" : "Expand"}
-        className="absolute top-1/2 right-0 z-30 inline-flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-line bg-card text-ink-2 shadow-card transition-colors hover:bg-app-bg hover:text-ink"
-      >
-        <SidebarIcon size={16} />
-      </button>
-    </aside>
-=======
     <>
       <aside
         className={cn(
-          "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-card py-5 transition-[width] duration-200 ease-out md:flex",
-          expanded ? "w-[220px] px-3" : "w-[72px] items-center",
+          "relative sticky top-0 z-20 hidden h-screen shrink-0 flex-col border-r border-line bg-card py-5 transition-[width] duration-200 ease-out md:flex",
+          expanded ? "w-[220px] px-3" : "w-[72px] items-center px-1.5",
         )}
       >
-        <div
-          className={cn(
-            "mb-8 flex w-full items-center",
-            expanded ? "justify-between px-1" : "flex-col gap-3",
-          )}
-        >
-          <Link
-            href="/today"
-            aria-label="NutriON home"
-            className={cn(expanded && "px-1")}
-          >
+        <div className="mb-8 flex w-full items-center justify-center px-1">
+          <Link href="/today" aria-label="NutriON home">
             {expanded ? <Logo /> : <Logo markOnly />}
           </Link>
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
-            aria-expanded={expanded}
-            title={expanded ? "Collapse" : "Expand"}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] text-ink-2 transition-colors hover:bg-app-bg hover:text-ink"
-          >
-            <SidebarIcon size={20} />
-          </button>
         </div>
 
         <nav
@@ -222,11 +130,21 @@ export function SideNav() {
             </span>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
+          aria-expanded={expanded}
+          title={expanded ? "Collapse" : "Expand"}
+          className="absolute top-1/2 right-0 z-30 inline-flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-line bg-card text-ink-2 shadow-card transition-colors hover:bg-app-bg hover:text-ink"
+        >
+          <SidebarIcon size={16} />
+        </button>
       </aside>
 
       <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
       <LogEntrySheet open={logOpen} onClose={() => setLogOpen(false)} />
     </>
->>>>>>> Stashed changes
   );
 }

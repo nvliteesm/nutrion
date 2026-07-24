@@ -8,15 +8,16 @@ import { WaterWaveDrop } from "./WaterWaveDrop";
 
 const SIP_ML = 30;
 const CUP_ML = 250;
+/** ms to pour one sip visually — bar fills smoothly at this rate */
 const HOLD_MS = 1000;
 const DEFAULT_CUPS = 8;
-/** Ignore tiny accidental taps when releasing mid-pour. */
-const MIN_COMMIT_ML = 2;
+const MIN_COMMIT_ML = 1;
+const WATER_TOAST_ID = "water-log";
 
 /**
  * Hold-to-fill water card.
- * While held, fill rises continuously. On release the level freezes
- * (partial pour is committed so it does not snap back).
+ * Display ml only rises while held (never snaps down).
+ * Release freezes at the current value (any ml, not only 30s).
  */
 export function HydrationCard({
   ml,
@@ -30,57 +31,57 @@ export function HydrationCard({
   delay?: number;
 }) {
   const { toast } = useToast();
-  const [committedMl, setCommittedMl] = useState(ml);
-  /** Preview ml for the in-progress sip (0 → SIP_ML). */
-  const [pourMl, setPourMl] = useState(0);
+  /** Frozen / committed display total (monotonic except undo). */
+  const [displayMl, setDisplayMl] = useState(ml);
   const [holding, setHolding] = useState(false);
 
+  const displayRef = useRef(ml);
+  /** ml already successfully logged to the backend (approx). */
+  const loggedRef = useRef(ml);
   const sipStack = useRef<{ id: number; ml: number }[]>([]);
   const holdingRef = useRef(false);
-  const sipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
-  const pourAnchor = useRef(0);
-  const pourMlRef = useRef(0);
+  const holdStartMl = useRef(0);
+  const holdStartAt = useRef(0);
   const pointerIdRef = useRef<number | null>(null);
-  const sipInFlight = useRef(false);
-  const pendingRefresh = useRef(false);
+  const loggingRef = useRef(false);
   const undoingRef = useRef(false);
-  const committedRef = useRef(ml);
+  const pendingRefresh = useRef(false);
 
   const cupsCount = Math.max(1, targetCups || DEFAULT_CUPS);
+  const targetMl = cupsCount * CUP_ML;
+  const rate = SIP_ML / HOLD_MS; // ml per ms
 
   useEffect(() => {
-    committedRef.current = committedMl;
-  }, [committedMl]);
+    displayRef.current = displayMl;
+  }, [displayMl]);
 
-  // Sync from parent, but never drop below local optimistic total (unless undoing).
+  // Sync from parent: never lower local display unless undoing.
   useEffect(() => {
     if (undoingRef.current) {
-      setCommittedMl(ml);
-      committedRef.current = ml;
+      displayRef.current = ml;
+      loggedRef.current = ml;
+      setDisplayMl(ml);
       undoingRef.current = false;
       return;
     }
-    if (ml > committedRef.current) {
-      setCommittedMl(ml);
-      committedRef.current = ml;
+    if (ml > displayRef.current && !holdingRef.current) {
+      displayRef.current = ml;
+      loggedRef.current = Math.max(loggedRef.current, ml);
+      setDisplayMl(ml);
+    } else if (ml > loggedRef.current) {
+      loggedRef.current = ml;
     }
   }, [ml]);
 
   useEffect(() => {
     return () => {
       holdingRef.current = false;
-      if (sipTimer.current) clearTimeout(sipTimer.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
-  const targetMl = cupsCount * CUP_ML;
-  // While holding, show committed + live pour so the drop fills continuously.
-  const liveMl = Math.min(
-    targetMl,
-    committedMl + (holding ? pourMl : 0),
-  );
+  const liveMl = Math.min(targetMl, displayMl);
   const cups = Math.min(cupsCount, Math.floor(liveMl / CUP_ML));
   const overallPct =
     targetMl > 0 ? Math.min(100, (liveMl / targetMl) * 100) : 0;
@@ -92,40 +93,29 @@ export function HydrationCard({
     }
   }
 
-  function flushRefresh() {
-    if (pendingRefresh.current) {
-      pendingRefresh.current = false;
-      onChanged?.();
-    }
-  }
-
-  function clearHoldTimers() {
-    holdingRef.current = false;
-    setHolding(false);
-    if (sipTimer.current) {
-      clearTimeout(sipTimer.current);
-      sipTimer.current = null;
-    }
-    stopAnim();
-    pourMlRef.current = 0;
-    setPourMl(0);
-    pointerIdRef.current = null;
+  function currentHoldMl() {
+    if (!holdingRef.current) return displayRef.current;
+    const elapsed = performance.now() - holdStartAt.current;
+    return Math.min(
+      targetMl,
+      holdStartMl.current + elapsed * rate,
+    );
   }
 
   function startPourAnim() {
-    pourAnchor.current = performance.now();
-    pourMlRef.current = 0;
-    setPourMl(0);
+    holdStartMl.current = displayRef.current;
+    holdStartAt.current = performance.now();
     stopAnim();
     const tick = () => {
       if (!holdingRef.current) return;
-      const elapsed = performance.now() - pourAnchor.current;
-      const room = Math.max(0, targetMl - committedRef.current);
-      const partial = Math.min(SIP_ML, room, (elapsed / HOLD_MS) * SIP_ML);
-      pourMlRef.current = partial;
-      setPourMl(partial);
-      if (room <= 0) {
-        void endHold(true);
+      const next = currentHoldMl();
+      // Never decrease
+      if (next >= displayRef.current) {
+        displayRef.current = next;
+        setDisplayMl(next);
+      }
+      if (next >= targetMl) {
+        void endHold();
         return;
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -133,78 +123,58 @@ export function HydrationCard({
     rafRef.current = requestAnimationFrame(tick);
   }
 
-  async function commitMl(amount: number): Promise<boolean> {
-    const mlToAdd = Math.round(amount);
-    if (mlToAdd < MIN_COMMIT_ML) return true;
-    if (committedRef.current >= targetMl) return true;
+  async function flushUnlogged(): Promise<void> {
+    const due = Math.round(displayRef.current - loggedRef.current);
+    if (due < MIN_COMMIT_ML || loggingRef.current) return;
 
-    // Wait out any in-flight log so release doesn't drop a partial pour.
-    const started = performance.now();
-    while (sipInFlight.current && performance.now() - started < 5000) {
-      await new Promise((r) => setTimeout(r, 25));
-    }
-    if (sipInFlight.current) return false;
-
-    sipInFlight.current = true;
-    const next = Math.min(targetMl, committedRef.current + mlToAdd);
-    const applied = next - committedRef.current;
-    committedRef.current = next;
-    setCommittedMl(next);
-    pourMlRef.current = 0;
-    setPourMl(0);
-
+    loggingRef.current = true;
     try {
-      const res = await logWaterSip(applied);
-      sipStack.current.push({ id: res.intake_id, ml: applied });
+      const res = await logWaterSip(due);
+      sipStack.current.push({ id: res.intake_id, ml: due });
+      loggedRef.current += due;
       pendingRefresh.current = true;
-      return true;
+      toast({
+        id: WATER_TOAST_ID,
+        title: "Water logged",
+        description: `+${due} ml · ${Math.round(displayRef.current)} ml today`,
+        variant: "success",
+      });
     } catch (err) {
-      const rolled = Math.max(0, committedRef.current - applied);
-      committedRef.current = rolled;
-      setCommittedMl(rolled);
       const msg = err instanceof Error ? err.message : "Backend unreachable";
       toast({
+        id: WATER_TOAST_ID,
         title: "Couldn't log water",
         description: msg,
         variant: "error",
       });
-      return false;
     } finally {
-      sipInFlight.current = false;
+      loggingRef.current = false;
     }
   }
 
-  function scheduleNextSip() {
-    if (sipTimer.current) clearTimeout(sipTimer.current);
-    sipTimer.current = setTimeout(() => {
-      if (!holdingRef.current) return;
-      void commitMl(SIP_ML).then((ok) => {
-        if (!holdingRef.current) return;
-        if (!ok || committedRef.current >= targetMl) {
-          clearHoldTimers();
-          flushRefresh();
-          return;
-        }
-        startPourAnim();
-        scheduleNextSip();
-      });
-    }, HOLD_MS);
-  }
+  async function endHold() {
+    if (!holdingRef.current) return;
+    const finalMl = Math.max(displayRef.current, currentHoldMl());
+    displayRef.current = Math.min(targetMl, finalMl);
+    setDisplayMl(displayRef.current);
 
-  async function endHold(fromTarget = false) {
-    if (!holdingRef.current && !fromTarget) return;
-    const partial = pourMlRef.current;
-    clearHoldTimers();
-    if (partial >= MIN_COMMIT_ML) {
-      await commitMl(partial);
+    holdingRef.current = false;
+    setHolding(false);
+    stopAnim();
+    pointerIdRef.current = null;
+
+    await flushUnlogged();
+    if (pendingRefresh.current) {
+      pendingRefresh.current = false;
+      onChanged?.();
     }
-    flushRefresh();
   }
 
   async function undoSip() {
     const last = sipStack.current.pop();
     if (last == null) {
       toast({
+        id: WATER_TOAST_ID,
         title: "Nothing to undo",
         description: "Hold to pour first",
         variant: "info",
@@ -212,39 +182,42 @@ export function HydrationCard({
       return;
     }
     undoingRef.current = true;
-    const next = Math.max(0, committedRef.current - last.ml);
-    committedRef.current = next;
-    setCommittedMl(next);
-    pourMlRef.current = 0;
-    setPourMl(0);
+    const next = Math.max(0, displayRef.current - last.ml);
+    displayRef.current = next;
+    loggedRef.current = Math.max(0, loggedRef.current - last.ml);
+    setDisplayMl(next);
     try {
       await deleteIntake(last.id);
       onChanged?.();
       toast({
-        title: "Sip undone",
-        description: `−${Math.round(last.ml)} ml`,
+        id: WATER_TOAST_ID,
+        title: "Water removed",
+        description: `−${Math.round(last.ml)} ml · ${Math.round(next)} ml today`,
         variant: "info",
       });
     } catch {
       undoingRef.current = false;
-      const restored = committedRef.current + last.ml;
-      committedRef.current = restored;
-      setCommittedMl(restored);
+      displayRef.current += last.ml;
+      loggedRef.current += last.ml;
+      setDisplayMl(displayRef.current);
       sipStack.current.push(last);
-      toast({ title: "Undo failed", variant: "error" });
+      toast({
+        id: WATER_TOAST_ID,
+        title: "Undo failed",
+        variant: "error",
+      });
     }
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (committedRef.current >= targetMl) return;
+    if (displayRef.current >= targetMl) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     pointerIdRef.current = e.pointerId;
     holdingRef.current = true;
     setHolding(true);
     startPourAnim();
-    scheduleNextSip();
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
@@ -286,18 +259,10 @@ export function HydrationCard({
           const start = i * CUP_ML;
           const filledInCup = Math.max(0, Math.min(CUP_ML, liveMl - start));
           const pct = (filledInCup / CUP_ML) * 100;
-          const isActiveCup =
-            holding &&
-            liveMl < targetMl &&
-            liveMl >= start &&
-            liveMl < start + CUP_ML;
           return (
             <div
               key={i}
-              className={cn(
-                "relative h-2.5 flex-1 overflow-hidden rounded-sm bg-line",
-                isActiveCup && "ring-1 ring-blue/40",
-              )}
+              className="relative h-2.5 flex-1 overflow-hidden rounded-sm bg-line"
             >
               <div
                 className="absolute inset-y-0 left-0 bg-blue"
@@ -314,7 +279,7 @@ export function HydrationCard({
       <div className="mt-4 flex items-center gap-2">
         <button
           type="button"
-          aria-label="Undo last sip"
+          aria-label="Undo last water"
           onClick={() => void undoSip()}
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-card-sm border border-line text-[18px] font-bold text-ink-2 hover:bg-app-bg"
         >
@@ -337,7 +302,7 @@ export function HydrationCard({
       </div>
 
       <p className="mt-2 text-center text-[11px] font-medium text-ink-3">
-        Hold to pour · release to keep · − to undo
+        Hold to pour slowly · release anytime · − to undo
       </p>
     </Card>
   );
