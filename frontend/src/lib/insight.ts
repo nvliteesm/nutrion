@@ -15,12 +15,12 @@ export function dailyInsight(
     return "No entries yet today. Scan a drink label or log a meal to see your progress.";
   }
 
-  const sugarLeft = targets.addedSugar_g - totals.addedSugar_g;
+  const sugarLeft = targets.sugar_g - totals.totalSugar_g;
 
   if (sugarLeft > 0) {
-    return `You've ${sugarLeft} g of added-sugar headroom left — an unsweetened drink this afternoon keeps you comfortably within target.`;
+    return `You've ${sugarLeft} g of sugar headroom left — an unsweetened drink this afternoon keeps you comfortably within target.`;
   }
 
   const over = Math.abs(sugarLeft);
-  return `You're ${over} g over your added-sugar target today. Return to your usual target tomorrow, and maybe pick an unsweetened option next time.`;
+  return `You're ${over} g over your sugar target today. Return to your usual target tomorrow, and maybe pick an unsweetened option next time.`;
 }

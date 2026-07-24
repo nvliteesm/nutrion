@@ -2,15 +2,15 @@ import { Card, ProgressBar, StatusPill } from "@/components/ui";
 import type { DailyStatus } from "@/lib/types";
 
 export function SugarCard({
-  addedSugar,
+  sugar,
   target,
 }: {
-  addedSugar: number;
+  sugar: number;
   target: number;
 }) {
-  const left = target - addedSugar;
+  const left = target - sugar;
   const status: DailyStatus =
-    addedSugar > target ? "above" : addedSugar >= target * 0.85 ? "approaching" : "within";
+    sugar > target ? "above" : sugar >= target * 0.85 ? "approaching" : "within";
   const summary =
     left >= 0 ? `Within target · ${left} g left` : `${Math.abs(left)} g over target`;
 
@@ -18,7 +18,7 @@ export function SugarCard({
     <Card className="p-4 md:p-5">
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-bold text-ink-2 md:text-[13px]">
-          Added sugar
+          Total sugar
         </span>
         <div className="hidden md:block">
           <StatusPill status={status} label={statusShort(status)} />
@@ -27,7 +27,7 @@ export function SugarCard({
 
       <div className="mb-2.5 mt-2 flex items-baseline gap-1.5">
         <span className="text-[22px] font-extrabold leading-none text-ink md:text-[28px]">
-          {addedSugar}
+          {sugar}
         </span>
         <span className="text-[12px] font-semibold text-ink-3 md:text-[13px]">
           / {target} g
@@ -35,7 +35,7 @@ export function SugarCard({
       </div>
 
       <ProgressBar
-        value={addedSugar}
+        value={sugar}
         max={target}
         height={8}
         colorClass={colorFor(status)}

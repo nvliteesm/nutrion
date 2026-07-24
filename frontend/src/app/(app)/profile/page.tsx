@@ -93,12 +93,12 @@ export default function ProfilePage() {
             }
           />
           <Field
-            label="Added sugar (g)"
+            label="Total sugar (g)"
             name="t_sugar"
             type="number"
-            value={targets.addedSugar_g}
+            value={targets.sugar_g}
             onChange={(e) =>
-              setTargets((t) => ({ ...t, addedSugar_g: Number(e.target.value) || 0 }))
+              setTargets((t) => ({ ...t, sugar_g: Number(e.target.value) || 0 }))
             }
           />
           <Field

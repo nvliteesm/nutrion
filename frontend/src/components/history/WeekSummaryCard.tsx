@@ -10,7 +10,7 @@ export function WeekSummaryCard({ summary }: { summary: WeekSummary }) {
       </div>
       <div className="grid grid-cols-3 gap-3.5">
         <Stat value={formatNumber(summary.avgCalories)} label="avg kcal / day" />
-        <Stat value={`${summary.avgAddedSugar} g`} label="avg added sugar" />
+        <Stat value={`${summary.avgSugar} g`} label="avg total sugar" />
         <Stat
           value={`${summary.daysWithinTarget} / ${summary.daysConsidered}`}
           label="days within target"

@@ -197,7 +197,6 @@ export function ManualForm() {
               <Field label="Calories (kcal)" name="calories" type="number" {...num("calories")} />
               <Field label="Carbohydrates (g)" name="carbs" type="number" {...num("carbs_g")} />
               <Field label="Total sugar (g)" name="totalSugar" type="number" {...num("totalSugar_g")} />
-              <Field label="Added sugar (g)" name="addedSugar" type="number" {...num("addedSugar_g")} />
             </>
           )}
 

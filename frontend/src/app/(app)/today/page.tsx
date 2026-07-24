@@ -63,8 +63,8 @@ export default function TodayPage() {
         />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-1 md:gap-[18px]">
           <SugarCard
-            addedSugar={totals.addedSugar_g}
-            target={user.targets.addedSugar_g}
+            sugar={totals.totalSugar_g}
+            target={user.targets.sugar_g}
           />
           <HydrationCard
             cups={totals.water_cups}

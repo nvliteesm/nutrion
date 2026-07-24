@@ -33,7 +33,7 @@ export function InsightsPremium({
 
   const topSource = data.sources[0] ?? null;
   const series = useMemo(
-    () => dailySeries(entries, targets, endIso, period, "addedSugar_g"),
+    () => dailySeries(entries, targets, endIso, period, "totalSugar_g"),
     [entries, targets, endIso, period],
   );
 
@@ -76,12 +76,12 @@ export function InsightsPremium({
             <ChartIcon size={16} />
           </span>
           <span className="text-[11px] font-bold tracking-wide text-ink-3">
-            ADDED SUGAR TREND
+            TOTAL SUGAR TREND
           </span>
         </div>
         <LineChart
           data={series}
-          target={targets.addedSugar_g}
+          target={targets.sugar_g}
           unit="g"
           colorClass="text-teal"
         />
@@ -106,7 +106,7 @@ export function InsightsPremium({
           {data.correlation ? (
             <>
               <p className="mb-2.5 text-[15px] font-semibold leading-relaxed text-ink">
-                On {data.correlation.highSugarDays} higher added-sugar day
+                On {data.correlation.highSugarDays} higher sugar day
                 {data.correlation.highSugarDays === 1 ? "" : "s"},{" "}
                 {data.correlation.alsoAboveCalories} also went above your calorie
                 target.
@@ -154,7 +154,7 @@ export function InsightsPremium({
         <InsightCard icon={<ChartIcon size={16} />} iconClass="bg-teal-t text-teal-d" label="WEEK OVER WEEK">
           {data.weekOverWeekPercent !== null ? (
             <p className="text-[15px] font-semibold leading-relaxed text-ink">
-              Average added-sugar intake{" "}
+              Average sugar intake{" "}
               {data.weekOverWeekPercent <= 0 ? (
                 <span className="text-teal-d">
                   decreased {Math.abs(data.weekOverWeekPercent)}%

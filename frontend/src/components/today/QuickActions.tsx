@@ -18,14 +18,14 @@ interface Action {
 const actions: Action[] = [
   {
     label: "Scan food",
-    href: "/scan/food",
+    href: "/scan?mode=food",
     icon: UtensilsIcon,
     iconBg: "bg-teal-t",
     iconColor: "text-teal-d",
   },
   {
     label: "Scan drink",
-    href: "/scan/drink",
+    href: "/scan?mode=drink",
     icon: CupIcon,
     iconBg: "bg-blue-t",
     iconColor: "text-blue-d",

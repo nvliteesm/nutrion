@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfidenceBadge } from "@/components/ui";
 import {
@@ -149,6 +149,15 @@ export default function ScanPage() {
     () => modes.find((m) => m.id === mode) ?? null,
     [mode],
   );
+
+  // Deep-link: /scan?mode=drink|food|medical jumps straight to that upload step.
+  useEffect(() => {
+    const m = new URLSearchParams(window.location.search).get("mode");
+    if (m === "drink" || m === "food" || m === "medical") {
+      setMode(m);
+      setStep("upload");
+    }
+  }, []);
 
   function resetAll() {
     setStep("pick");

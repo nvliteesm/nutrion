@@ -10,7 +10,7 @@ export interface PersonalReport {
   periodLabel: string;
   periodDays: number;
   avgCalories: number;
-  avgAddedSugar: number;
+  avgSugar: number;
   daysWithinTarget: number;
   totalDays: number;
   loggingCompleteness: number; // 0..100
@@ -53,8 +53,8 @@ export function generateReport(
     logged += 1;
     const totals = buildDailyTotals(key, dayEntries, targets);
     calSum += totals.calories;
-    sugarSum += totals.addedSugar_g;
-    if (totals.calories <= targets.calories && totals.addedSugar_g <= targets.addedSugar_g) {
+    sugarSum += totals.totalSugar_g;
+    if (totals.calories <= targets.calories && totals.totalSugar_g <= targets.sugar_g) {
       within += 1;
     }
     const foods = dayEntries.filter((e) => e.type === "food").length;
@@ -62,7 +62,7 @@ export function generateReport(
   }
 
   const avgCalories = logged ? Math.round(calSum / logged) : 0;
-  const avgAddedSugar = logged ? Math.round(sugarSum / logged) : 0;
+  const avgSugar = logged ? Math.round(sugarSum / logged) : 0;
   const loggingCompleteness = periodDays ? Math.round((complete / periodDays) * 100) : 0;
 
   // Patterns
@@ -70,11 +70,11 @@ export function generateReport(
   if (insights.weekOverWeekPercent !== null) {
     if (insights.weekOverWeekPercent <= 0) {
       patterns.push(
-        `Added sugar trended down ${Math.abs(insights.weekOverWeekPercent)}% over the period.`,
+        `Total sugar trended down ${Math.abs(insights.weekOverWeekPercent)}% over the period.`,
       );
     } else {
       patterns.push(
-        `Added sugar trended up ${insights.weekOverWeekPercent}% over the period.`,
+        `Total sugar trended up ${insights.weekOverWeekPercent}% over the period.`,
       );
     }
   }
@@ -107,14 +107,14 @@ export function generateReport(
     periodLabel: `${startLabel} – ${endLabel}`,
     periodDays,
     avgCalories,
-    avgAddedSugar,
+    avgSugar,
     daysWithinTarget: within,
     totalDays: periodDays,
     loggingCompleteness,
     topSugarSources: insights.sources.map((s) => `${s.name} (${s.percent}%)`),
     keyPatterns: patterns,
     questionsForProfessional: [
-      '"Is my added-sugar target of 40 g/day appropriate for me?"',
+      '"Is my daily sugar target appropriate for me?"',
       '"How might my weekend eating patterns fit into my overall goals?"',
     ],
     confirmedMetrics: confirmed,

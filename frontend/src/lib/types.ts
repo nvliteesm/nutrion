@@ -68,7 +68,8 @@ export interface IntakeEntry {
 /** Per-day nutrition targets. */
 export interface NutritionTargets {
   calories: number;
-  addedSugar_g: number;
+  /** Total sugar target in grams. */
+  sugar_g: number;
   /** Hydration goal expressed in cups. */
   water_cups: number;
 }
@@ -78,7 +79,7 @@ export type GoalSource = "user" | "nutrion";
 /** Default targets for new users (before they customize). */
 export const DEFAULT_TARGETS: NutritionTargets = {
   calories: 2000,
-  addedSugar_g: 40,
+  sugar_g: 60,
   water_cups: 8,
 };
 

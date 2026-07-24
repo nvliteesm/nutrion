@@ -45,14 +45,14 @@ export function waterCups(entries: IntakeEntry[]): number {
  * future target — this only classifies today for display.
  */
 export function deriveStatus(
-  totals: Pick<Nutrients, "calories" | "addedSugar_g">,
+  totals: Pick<Nutrients, "calories" | "totalSugar_g">,
   targets: NutritionTargets,
   entryCount: number,
 ): DailyStatus {
   if (entryCount === 0) return "no_data";
 
   const calRatio = totals.calories / targets.calories;
-  const sugarRatio = totals.addedSugar_g / targets.addedSugar_g;
+  const sugarRatio = totals.totalSugar_g / targets.sugar_g;
   const worst = Math.max(calRatio, sugarRatio);
 
   // Very light logging for the day — treat as incomplete rather than "within".

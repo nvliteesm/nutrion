@@ -119,7 +119,7 @@ export default function ReportPage() {
 
         <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
           <StatBlock value={formatNumber(report.avgCalories)} label="avg kcal / day" />
-          <StatBlock value={`${report.avgAddedSugar} g`} label="avg added sugar" />
+          <StatBlock value={`${report.avgSugar} g`} label="avg total sugar" />
           <StatBlock
             value={`${report.daysWithinTarget} / ${report.totalDays}`}
             label="days within target"

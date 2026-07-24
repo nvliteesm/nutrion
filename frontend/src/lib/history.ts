@@ -54,7 +54,7 @@ export function calendarStatus(
   if (totals.entryCount === 0) return "none";
 
   const calRatio = totals.calories / targets.calories;
-  const sugarRatio = totals.addedSugar_g / targets.addedSugar_g;
+  const sugarRatio = totals.totalSugar_g / targets.sugar_g;
   const worst = Math.max(calRatio, sugarRatio);
 
   // Very little logged for the day.
@@ -111,7 +111,7 @@ export function buildMonthGrid(
 
 export interface WeekSummary {
   avgCalories: number;
-  avgAddedSugar: number;
+  avgSugar: number;
   daysWithinTarget: number;
   daysConsidered: number;
   daysLogged: number;
@@ -143,10 +143,10 @@ export function weekSummary(
     const totals = buildDailyTotals(key, entries, targets);
     logged += 1;
     calSum += totals.calories;
-    sugarSum += totals.addedSugar_g;
+    sugarSum += totals.totalSugar_g;
     if (
       totals.calories <= targets.calories &&
-      totals.addedSugar_g <= targets.addedSugar_g
+      totals.totalSugar_g <= targets.sugar_g
     ) {
       within += 1;
     }
@@ -154,7 +154,7 @@ export function weekSummary(
 
   return {
     avgCalories: logged ? Math.round(calSum / logged) : 0,
-    avgAddedSugar: logged ? Math.round(sugarSum / logged) : 0,
+    avgSugar: logged ? Math.round(sugarSum / logged) : 0,
     daysWithinTarget: within,
     daysConsidered: days,
     daysLogged: logged,

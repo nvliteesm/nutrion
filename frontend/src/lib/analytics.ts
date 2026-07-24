@@ -45,7 +45,7 @@ function drinkSugarSources(period: IntakeEntry[]): SugarSource[] {
   let total = 0;
   for (const e of period) {
     if (e.type !== "drink") continue;
-    const g = e.nutrients.addedSugar_g;
+    const g = e.nutrients.totalSugar_g;
     if (g <= 0) continue;
     byName.set(e.name, (byName.get(e.name) ?? 0) + g);
     total += g;
@@ -71,7 +71,7 @@ function afternoonSweetDrink(entries: IntakeEntry[], endIso: string): {
   for (const key of keys) {
     const has = entries.some((e) => {
       if (localDayKey(e.loggedAt) !== key) return false;
-      if (e.type !== "drink" || e.nutrients.addedSugar_g <= 0) return false;
+      if (e.type !== "drink" || e.nutrients.totalSugar_g <= 0) return false;
       const hour = new Date(e.loggedAt).getHours();
       return hour >= 15;
     });
@@ -94,7 +94,7 @@ export function dailySeries(
   targets: NutritionTargets,
   endIso: string,
   periodDays: number,
-  metric: "addedSugar_g" | "calories" = "addedSugar_g",
+  metric: "totalSugar_g" | "calories" = "totalSugar_g",
 ): SeriesPoint[] {
   const byDate = groupByDate(entries);
   const keys = periodKeys(endIso, periodDays).reverse(); // oldest first
@@ -104,7 +104,7 @@ export function dailySeries(
     const d = new Date(`${key}T00:00:00`);
     return {
       label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      value: metric === "calories" ? totals.calories : totals.addedSugar_g,
+      value: metric === "calories" ? totals.calories : totals.totalSugar_g,
     };
   });
 }
@@ -131,20 +131,20 @@ export function computeInsights(
     const foods = dayEntries.filter((e) => e.type === "food").length;
     if (foods >= 2) completeDays += 1;
     const totals = buildDailyTotals(key, dayEntries, targets);
-    if (totals.addedSugar_g > targets.addedSugar_g) {
+    if (totals.totalSugar_g > targets.sugar_g) {
       highSugarDays += 1;
       if (totals.calories > targets.calories) alsoAboveCalories += 1;
     }
   }
 
-  // Week-over-week added-sugar average (7-day windows).
+  // Week-over-week total-sugar average (7-day windows).
   const avg = (end: string): number | null => {
     let sum = 0;
     let n = 0;
     for (const key of periodKeys(end, 7)) {
       const de = byDate.get(key);
       if (!de || de.length === 0) continue;
-      sum += buildDailyTotals(key, de, targets).addedSugar_g;
+      sum += buildDailyTotals(key, de, targets).totalSugar_g;
       n += 1;
     }
     return n ? sum / n : null;

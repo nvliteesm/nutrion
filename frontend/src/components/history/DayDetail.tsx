@@ -59,9 +59,9 @@ export function DayDetail({
               sub={`/ ${formatNumber(targets.calories)}`}
             />
             <Metric
-              label="Added sugar"
-              value={`${totals.addedSugar_g}`}
-              sub={`/ ${targets.addedSugar_g} g`}
+              label="Total sugar"
+              value={`${totals.totalSugar_g}`}
+              sub={`/ ${targets.sugar_g} g`}
               accent="amber"
             />
             <Metric label="Carbs" value={`${totals.carbs_g}`} sub="g" />
