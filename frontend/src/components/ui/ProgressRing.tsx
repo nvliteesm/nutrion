@@ -4,6 +4,7 @@ import { progress as clampProgress } from "@/lib/nutrition";
 interface ProgressRingProps {
   value: number;
   max: number;
+  /** Pixel size. Omit to fill the parent via className (aspect-square). */
   size?: number;
   strokeWidth?: number;
   /** Tailwind text-color class for the arc, e.g. "text-teal". */
@@ -20,7 +21,7 @@ interface ProgressRingProps {
 export function ProgressRing({
   value,
   max,
-  size = 172,
+  size,
   strokeWidth = 11,
   colorClass = "text-teal",
   trackClass = "text-line",
@@ -31,13 +32,18 @@ export function ProgressRing({
   const circumference = 2 * Math.PI * radius;
   const ratio = clampProgress(value, max);
   const dash = circumference * ratio;
+  const fluid = size == null;
 
   return (
     <div
-      className={cn("relative", className)}
-      style={{ width: size, height: size }}
+      className={cn("relative aspect-square", className)}
+      style={fluid ? undefined : { width: size, height: size }}
     >
-      <svg width={size} height={size} viewBox="0 0 120 120">
+      <svg
+        width={fluid ? "100%" : size}
+        height={fluid ? "100%" : size}
+        viewBox="0 0 120 120"
+      >
         <circle
           className={trackClass}
           cx="60"

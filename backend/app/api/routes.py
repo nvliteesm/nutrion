@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
+from app.models.orm import Intake
 from app.models.schemas import (
     DailyTotals,
     DrinkAnalyzeResponse,
     DrinkConfirmRequest,
     DrinkConfirmResponse,
+    ExtractedMeal,
     FoodAnalyzeResponse,
     FoodConfirmRequest,
     FoodConfirmResponse,
@@ -25,6 +27,7 @@ from app.models.schemas import (
     MedicalConfirmResponse,
     MedicalMetricRecord,
     MedicalReportRecord,
+    NutrientValues,
     StorageStatus,
 )
 from app.services import analysis_store, confirm_flow, ingest, structured_store, vector_store
@@ -41,6 +44,16 @@ class VectorSearchRequest(BaseModel):
 
 class VectorSearchResponse(BaseModel):
     results: list[dict[str, Any]]
+
+
+class WaterSipRequest(BaseModel):
+    user_id: str = "default"
+    ml: float = Field(default=30, gt=0, le=2000)
+
+
+class WaterSipResponse(BaseModel):
+    intake_id: int
+    ml: float
 
 
 def _bool_form(value: Optional[str], default: bool = True) -> bool:
@@ -201,34 +214,6 @@ async def document_endpoint(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Document ingest failed: {exc}") from exc
-
-
-@router.post(
-    "/ocr",
-    response_model=IngestResponse,
-    summary="Alias of /drink",
-    tags=["ingestion"],
-    deprecated=True,
-)
-async def ocr_alias(
-    file: UploadFile = File(...),
-    user_id: str = Form("default"),
-    persist: Optional[str] = Form("true"),
-    session: AsyncSession = Depends(get_session),
-) -> IngestResponse:
-    file_bytes, filename = await _read_upload(file)
-    try:
-        return await ingest.run_drink(
-            session,
-            file_bytes=file_bytes or b"",
-            filename=filename or "",
-            user_id=user_id or "default",
-            persist=_bool_form(persist, True),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"OCR failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -507,6 +492,62 @@ async def get_intake(
     if not row:
         raise HTTPException(status_code=404, detail="Intake not found")
     return row
+
+
+@router.delete(
+    "/intakes/{intake_id}",
+    summary="Delete one structured intake",
+    tags=["storage"],
+)
+async def delete_intake(
+    intake_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    row = await session.get(Intake, intake_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Intake not found")
+    await session.delete(row)
+    await session.commit()
+    return {"ok": True, "id": intake_id}
+
+
+@api.post(
+    "/water/sip",
+    response_model=WaterSipResponse,
+    summary="Log a water sip (hold-to-fill)",
+    tags=["storage"],
+)
+async def water_sip(
+    body: WaterSipRequest,
+    session: AsyncSession = Depends(get_session),
+) -> WaterSipResponse:
+    ml = round(float(body.ml), 1)
+    meal = ExtractedMeal(
+        name="Water",
+        serving=f"{ml:g} ml",
+        nutrients=NutrientValues(
+            calories=0,
+            protein_g=0,
+            carbs_g=0,
+            fat_g=0,
+            fiber_g=0,
+            sugar_g=0,
+            sodium_mg=0,
+            extras={"drink_volume_ml": ml},
+        ),
+        raw_text="Hold-to-fill water sip",
+        confidence=1.0,
+        source="manual",
+    )
+    row = await structured_store.save_intake(
+        session,
+        meal,
+        user_id=body.user_id or "default",
+        source="manual",
+        kind="water",
+        confirmed=True,
+    )
+    return WaterSipResponse(intake_id=row.id, ml=ml)
 
 
 @router.get(

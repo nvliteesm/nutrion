@@ -10,32 +10,37 @@ const SIP_ML = 30;
 const CUP_ML = 250;
 const HOLD_MS = 1000;
 const DEFAULT_CUPS = 8;
+/** Ignore tiny accidental taps when releasing mid-pour. */
+const MIN_COMMIT_ML = 2;
 
 /**
  * Hold-to-fill water card.
- * Fill only advances on committed sips (never snaps back on release).
- * Every 1s while held commits 1 sip (30 ml).
+ * While held, fill rises continuously. On release the level freezes
+ * (partial pour is committed so it does not snap back).
  */
 export function HydrationCard({
   ml,
   targetCups,
   onChanged,
+  delay = 0,
 }: {
   ml: number;
   targetCups: number;
   onChanged?: () => void;
+  delay?: number;
 }) {
   const { toast } = useToast();
   const [committedMl, setCommittedMl] = useState(ml);
-  /** Preview ml for the in-progress sip (0 → SIP_ML). Does not lower the bars on release. */
+  /** Preview ml for the in-progress sip (0 → SIP_ML). */
   const [pourMl, setPourMl] = useState(0);
   const [holding, setHolding] = useState(false);
 
-  const sipStack = useRef<number[]>([]);
+  const sipStack = useRef<{ id: number; ml: number }[]>([]);
   const holdingRef = useRef(false);
   const sipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
   const pourAnchor = useRef(0);
+  const pourMlRef = useRef(0);
   const pointerIdRef = useRef<number | null>(null);
   const sipInFlight = useRef(false);
   const pendingRefresh = useRef(false);
@@ -71,12 +76,14 @@ export function HydrationCard({
   }, []);
 
   const targetMl = cupsCount * CUP_ML;
-  // Committed fill only — release never snaps the droplet/bars down.
-  const displayMl = Math.min(targetMl, committedMl);
-  const cups = Math.min(cupsCount, Math.floor(displayMl / CUP_ML));
+  // While holding, show committed + live pour so the drop fills continuously.
+  const liveMl = Math.min(
+    targetMl,
+    committedMl + (holding ? pourMl : 0),
+  );
+  const cups = Math.min(cupsCount, Math.floor(liveMl / CUP_ML));
   const overallPct =
-    targetMl > 0 ? Math.min(100, (displayMl / targetMl) * 100) : 0;
-  const pourProgress = holding ? Math.min(1, pourMl / SIP_ML) : 0;
+    targetMl > 0 ? Math.min(100, (liveMl / targetMl) * 100) : 0;
 
   function stopAnim() {
     if (rafRef.current) {
@@ -92,7 +99,7 @@ export function HydrationCard({
     }
   }
 
-  function stopHold() {
+  function clearHoldTimers() {
     holdingRef.current = false;
     setHolding(false);
     if (sipTimer.current) {
@@ -100,52 +107,68 @@ export function HydrationCard({
       sipTimer.current = null;
     }
     stopAnim();
+    pourMlRef.current = 0;
     setPourMl(0);
     pointerIdRef.current = null;
-    flushRefresh();
   }
 
   function startPourAnim() {
     pourAnchor.current = performance.now();
+    pourMlRef.current = 0;
+    setPourMl(0);
     stopAnim();
     const tick = () => {
       if (!holdingRef.current) return;
       const elapsed = performance.now() - pourAnchor.current;
-      const partial = Math.min(SIP_ML, (elapsed / HOLD_MS) * SIP_ML);
+      const room = Math.max(0, targetMl - committedRef.current);
+      const partial = Math.min(SIP_ML, room, (elapsed / HOLD_MS) * SIP_ML);
+      pourMlRef.current = partial;
       setPourMl(partial);
+      if (room <= 0) {
+        void endHold(true);
+        return;
+      }
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
   }
 
-  async function addSip() {
-    if (sipInFlight.current) return;
-    if (committedRef.current >= targetMl) {
-      stopHold();
-      return;
+  async function commitMl(amount: number): Promise<boolean> {
+    const mlToAdd = Math.round(amount);
+    if (mlToAdd < MIN_COMMIT_ML) return true;
+    if (committedRef.current >= targetMl) return true;
+
+    // Wait out any in-flight log so release doesn't drop a partial pour.
+    const started = performance.now();
+    while (sipInFlight.current && performance.now() - started < 5000) {
+      await new Promise((r) => setTimeout(r, 25));
     }
+    if (sipInFlight.current) return false;
+
     sipInFlight.current = true;
-    const next = Math.min(targetMl, committedRef.current + SIP_ML);
+    const next = Math.min(targetMl, committedRef.current + mlToAdd);
+    const applied = next - committedRef.current;
     committedRef.current = next;
     setCommittedMl(next);
+    pourMlRef.current = 0;
     setPourMl(0);
-    pourAnchor.current = performance.now();
+
     try {
-      const res = await logWaterSip(SIP_ML);
-      sipStack.current.push(res.intake_id);
-      // Defer parent refresh until hold ends so stale fetches can't erase fill.
+      const res = await logWaterSip(applied);
+      sipStack.current.push({ id: res.intake_id, ml: applied });
       pendingRefresh.current = true;
+      return true;
     } catch (err) {
-      const rolled = Math.max(0, committedRef.current - SIP_ML);
+      const rolled = Math.max(0, committedRef.current - applied);
       committedRef.current = rolled;
       setCommittedMl(rolled);
-      stopHold();
       const msg = err instanceof Error ? err.message : "Backend unreachable";
       toast({
-        title: "Couldn't log sip",
+        title: "Couldn't log water",
         description: msg,
         variant: "error",
       });
+      return false;
     } finally {
       sipInFlight.current = false;
     }
@@ -155,13 +178,27 @@ export function HydrationCard({
     if (sipTimer.current) clearTimeout(sipTimer.current);
     sipTimer.current = setTimeout(() => {
       if (!holdingRef.current) return;
-      void addSip().finally(() => {
-        if (holdingRef.current) {
-          startPourAnim();
-          scheduleNextSip();
+      void commitMl(SIP_ML).then((ok) => {
+        if (!holdingRef.current) return;
+        if (!ok || committedRef.current >= targetMl) {
+          clearHoldTimers();
+          flushRefresh();
+          return;
         }
+        startPourAnim();
+        scheduleNextSip();
       });
     }, HOLD_MS);
+  }
+
+  async function endHold(fromTarget = false) {
+    if (!holdingRef.current && !fromTarget) return;
+    const partial = pourMlRef.current;
+    clearHoldTimers();
+    if (partial >= MIN_COMMIT_ML) {
+      await commitMl(partial);
+    }
+    flushRefresh();
   }
 
   async function undoSip() {
@@ -169,27 +206,28 @@ export function HydrationCard({
     if (last == null) {
       toast({
         title: "Nothing to undo",
-        description: "Hold to pour a sip first",
+        description: "Hold to pour first",
         variant: "info",
       });
       return;
     }
     undoingRef.current = true;
-    const next = Math.max(0, committedRef.current - SIP_ML);
+    const next = Math.max(0, committedRef.current - last.ml);
     committedRef.current = next;
     setCommittedMl(next);
+    pourMlRef.current = 0;
     setPourMl(0);
     try {
-      await deleteIntake(last);
+      await deleteIntake(last.id);
       onChanged?.();
       toast({
         title: "Sip undone",
-        description: `−${SIP_ML} ml`,
+        description: `−${Math.round(last.ml)} ml`,
         variant: "info",
       });
     } catch {
       undoingRef.current = false;
-      const restored = committedRef.current + SIP_ML;
+      const restored = committedRef.current + last.ml;
       committedRef.current = restored;
       setCommittedMl(restored);
       sipStack.current.push(last);
@@ -223,11 +261,11 @@ export function HydrationCard({
     } catch {
       /* ignore */
     }
-    stopHold();
+    void endHold();
   }
 
   return (
-    <Card className="flex h-full flex-col p-4 md:p-5">
+    <Card className="flex h-full flex-col p-4 md:p-5" delay={delay}>
       <div className="flex items-center justify-between">
         <span className="text-[13px] font-bold text-ink">Add water</span>
         <span className="text-[11px] font-semibold text-ink-3">
@@ -236,28 +274,23 @@ export function HydrationCard({
       </div>
 
       <p className="mt-3 text-[13px] font-semibold text-ink-2">
-        {Math.round(displayMl)} ml of {targetMl} ml · {cups} of {cupsCount}{" "}
-        cups
+        {Math.round(liveMl)} ml of {targetMl} ml · {cups} of {cupsCount} cups
       </p>
 
       <div className="mt-4">
         <WaterWaveDrop pct={overallPct} pouring={holding} />
       </div>
 
-      {/* Cup bars — only committed fill (no snap-back) */}
       <div className="mt-4 flex gap-1.5">
         {Array.from({ length: cupsCount }).map((_, i) => {
           const start = i * CUP_ML;
-          const filledInCup = Math.max(
-            0,
-            Math.min(CUP_ML, displayMl - start),
-          );
+          const filledInCup = Math.max(0, Math.min(CUP_ML, liveMl - start));
           const pct = (filledInCup / CUP_ML) * 100;
           const isActiveCup =
             holding &&
-            displayMl < targetMl &&
-            displayMl >= start &&
-            displayMl < start + CUP_ML;
+            liveMl < targetMl &&
+            liveMl >= start &&
+            liveMl < start + CUP_ML;
           return (
             <div
               key={i}
@@ -270,18 +303,9 @@ export function HydrationCard({
                 className="absolute inset-y-0 left-0 bg-blue"
                 style={{
                   width: `${pct}%`,
-                  transition: "width 280ms ease-out",
+                  transition: holding ? "none" : "width 280ms ease-out",
                 }}
               />
-              {isActiveCup && (
-                <div
-                  className="absolute inset-y-0 bg-blue/35"
-                  style={{
-                    left: `${pct}%`,
-                    width: `${((SIP_ML * pourProgress) / CUP_ML) * 100}%`,
-                  }}
-                />
-              )}
             </div>
           );
         })}
@@ -301,7 +325,7 @@ export function HydrationCard({
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          onLostPointerCapture={stopHold}
+          onLostPointerCapture={() => void endHold()}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
             "flex h-11 flex-1 touch-none select-none items-center justify-center rounded-card-sm text-[14px] font-bold text-white transition-colors",
@@ -313,7 +337,7 @@ export function HydrationCard({
       </div>
 
       <p className="mt-2 text-center text-[11px] font-medium text-ink-3">
-        Hold to pour gradually · 1s = 1 sip ({SIP_ML} ml) · − to undo
+        Hold to pour · release to keep · − to undo
       </p>
     </Card>
   );

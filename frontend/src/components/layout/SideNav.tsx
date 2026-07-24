@@ -35,33 +35,14 @@ export function SideNav() {
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-card py-5 transition-[width] duration-200 ease-out md:flex",
-        expanded ? "w-[220px] px-3" : "w-[72px] items-center",
+        "relative sticky top-0 z-20 hidden h-screen shrink-0 flex-col border-r border-line bg-card py-5 transition-[width] duration-200 ease-out md:flex",
+        expanded ? "w-[220px] px-3" : "w-[72px] items-center px-1.5",
       )}
     >
-      <div
-        className={cn(
-          "mb-8 flex w-full items-center",
-          expanded ? "justify-between px-1" : "flex-col gap-3",
-        )}
-      >
-        <Link
-          href="/today"
-          aria-label="NutriON home"
-          className={cn(expanded && "px-1")}
-        >
+      <div className="mb-8 flex w-full items-center justify-center px-1">
+        <Link href="/today" aria-label="NutriON home">
           {expanded ? <Logo /> : <Logo markOnly />}
         </Link>
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
-          aria-expanded={expanded}
-          title={expanded ? "Collapse" : "Expand"}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] text-ink-2 transition-colors hover:bg-app-bg hover:text-ink"
-        >
-          <SidebarIcon size={20} />
-        </button>
       </div>
 
       <nav
@@ -110,6 +91,18 @@ export function SideNav() {
         </span>
         {expanded && <span>Profile</span>}
       </Link>
+
+      {/* Toggle sits just outside the rail edge */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
+        aria-expanded={expanded}
+        title={expanded ? "Collapse" : "Expand"}
+        className="absolute top-1/2 right-0 z-30 inline-flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-line bg-card text-ink-2 shadow-card transition-colors hover:bg-app-bg hover:text-ink"
+      >
+        <SidebarIcon size={16} />
+      </button>
     </aside>
   );
 }

@@ -218,7 +218,7 @@ export async function confirmMedical(analysisId: string, metrics: unknown[], use
   return res.json();
 }
 
-/** One water sip (~30 ml). Hold-to-fill fires this once per second. */
+/** Log water volume (ml). Hold-to-fill commits full sips and partials on release. */
 export async function logWaterSip(ml = 30, userId = "default"): Promise<{ intake_id: number; ml: number }> {
   const res = await fetch("/api/water/sip", {
     method: "POST",

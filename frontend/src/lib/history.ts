@@ -71,6 +71,9 @@ export interface DayCell {
   dateIso: string | null;
   status: CalendarStatus | null;
   isFuture: boolean;
+  /** Total sugar for the day (null for padding / future). */
+  sugar_g: number | null;
+  sugarTarget_g: number | null;
 }
 
 /**
@@ -90,25 +93,52 @@ export function buildMonthGrid(
 
   const cells: DayCell[] = [];
   for (let i = 0; i < startWeekday; i++) {
-    cells.push({ day: null, dateIso: null, status: null, isFuture: false });
+    cells.push({
+      day: null,
+      dateIso: null,
+      status: null,
+      isFuture: false,
+      sugar_g: null,
+      sugarTarget_g: null,
+    });
   }
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateIso = `${year}-${String(month0 + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const isFuture = dateIso > todayIso;
     const entries = byDate.get(dateIso) ?? [];
-    const status = isFuture
-      ? "none"
-      : calendarStatus(buildDailyTotals(dateIso, entries, targets), targets);
-    cells.push({ day: d, dateIso, status: isFuture ? null : status, isFuture });
+    const totals = buildDailyTotals(dateIso, entries, targets);
+    const status = isFuture ? "none" : calendarStatus(totals, targets);
+    cells.push({
+      day: d,
+      dateIso,
+      status: isFuture ? null : status,
+      isFuture,
+      sugar_g: isFuture ? null : totals.totalSugar_g,
+      sugarTarget_g: isFuture ? null : targets.sugar_g,
+    });
   }
 
   while (cells.length % 7 !== 0) {
-    cells.push({ day: null, dateIso: null, status: null, isFuture: false });
+    cells.push({
+      day: null,
+      dateIso: null,
+      status: null,
+      isFuture: false,
+      sugar_g: null,
+      sugarTarget_g: null,
+    });
   }
   // Always 6 weeks so the calendar height stays constant across months.
   while (cells.length < 42) {
-    cells.push({ day: null, dateIso: null, status: null, isFuture: false });
+    cells.push({
+      day: null,
+      dateIso: null,
+      status: null,
+      isFuture: false,
+      sugar_g: null,
+      sugarTarget_g: null,
+    });
   }
   return cells;
 }
