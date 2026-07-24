@@ -1,1 +1,1 @@
-"""Nutrion backend — data ingestion, processing, and storage API."""
+"""Nutrion backend — analyze → confirm → save API."""

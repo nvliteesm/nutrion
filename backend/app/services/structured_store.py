@@ -87,6 +87,15 @@ async def get_intake(session: AsyncSession, intake_id: int) -> IntakeRecord | No
     return intake_to_record(row) if row else None
 
 
+async def delete_intake(session: AsyncSession, intake_id: int) -> bool:
+    row = await session.get(Intake, intake_id)
+    if not row:
+        return False
+    await session.delete(row)
+    await session.commit()
+    return True
+
+
 async def list_intakes(
     session: AsyncSession,
     *,

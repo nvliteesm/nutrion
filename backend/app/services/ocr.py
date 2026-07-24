@@ -52,7 +52,15 @@ def stub_ocr_text(path: Path) -> str:
     )
 
 
-async def extract_text_from_image(path: Path | str) -> str:
+def is_stub_ocr_text(text: str) -> bool:
+    return "(stub OCR" in (text or "")
+
+
+async def extract_text_from_image(
+    path: Path | str,
+    *,
+    allow_stub: bool = True,
+) -> str:
     path = Path(path)
     if path.suffix.lower() not in IMAGE_EXTS:
         raise ValueError(f"Unsupported image type: {path.suffix}")
@@ -73,4 +81,6 @@ async def extract_text_from_image(path: Path | str) -> str:
             return text.strip()
         logger.warning("Azure vision OCR unavailable; falling back to stub")
 
-    return stub_ocr_text(path)
+    if allow_stub:
+        return stub_ocr_text(path)
+    return ""

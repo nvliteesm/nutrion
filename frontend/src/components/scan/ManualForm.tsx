@@ -48,6 +48,11 @@ export function ManualForm() {
     setFavorites(getFavorites());
   }, []);
 
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("type");
+    if (t === "food" || t === "drink" || t === "water") setTab(t);
+  }, []);
+
   const num = (key: keyof ReturnType<typeof zeroNutrients>) => ({
     value: n[key],
     min: 0,

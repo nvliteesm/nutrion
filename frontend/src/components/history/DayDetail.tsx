@@ -61,12 +61,12 @@ export function DayDetail({
       </div>
 
       {totals.entryCount === 0 ? (
-        <p className="py-8 text-center text-[13px] font-medium text-ink-3">
+        <p className="flex flex-1 items-center justify-center py-8 text-center text-[13px] font-medium text-ink-3">
           No entries logged on this day.
         </p>
       ) : (
         <>
-          <div className="my-3.5 grid grid-cols-2 gap-2.5">
+          <div className="my-3 grid shrink-0 grid-cols-2 gap-2">
             <Metric
               label="Calories"
               value={`${formatNumber(totals.calories)}`}
@@ -87,7 +87,7 @@ export function DayDetail({
             />
           </div>
 
-          <div className="mb-1.5 text-[11px] font-bold tracking-wide text-ink-3">
+          <div className="mb-1.5 shrink-0 text-[11px] font-bold tracking-wide text-ink-3">
             ENTRIES · {nonWater.length}
           </div>
 
@@ -170,9 +170,9 @@ function Metric({
         ? "text-blue-d"
         : "text-ink-3";
   return (
-    <div className="rounded-[11px] bg-app-bg px-3 py-2.5">
-      <div className={`text-[10.5px] font-semibold ${labelColor}`}>{label}</div>
-      <div className="mt-0.5 text-[17px] font-extrabold text-ink">
+    <div className="rounded-[11px] bg-app-bg px-2.5 py-2">
+      <div className={`text-[10px] font-semibold ${labelColor}`}>{label}</div>
+      <div className="mt-0.5 text-[15px] font-extrabold text-ink">
         {value}
         <span className="text-[10px] font-semibold text-ink-3"> {sub}</span>
       </div>

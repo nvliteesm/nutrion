@@ -20,7 +20,6 @@ from app.models.schemas import (
     FoodConfirmRequest,
     FoodConfirmResponse,
     HealthResponse,
-    IngestResponse,
     IntakeRecord,
     MedicalAnalyzeResponse,
     MedicalConfirmRequest,
@@ -29,8 +28,10 @@ from app.models.schemas import (
     MedicalReportRecord,
     NutrientValues,
     StorageStatus,
+    WaterSipRequest,
+    WaterSipResponse,
 )
-from app.services import analysis_store, confirm_flow, ingest, structured_store, vector_store
+from app.services import analysis_store, confirm_flow, structured_store, vector_store
 
 router = APIRouter()
 api = APIRouter(prefix="/api")
@@ -69,7 +70,7 @@ async def _read_upload(file: Optional[UploadFile]) -> tuple[bytes | None, str | 
 
 
 # ---------------------------------------------------------------------------
-# Health / legacy ingestion
+# Health
 # ---------------------------------------------------------------------------
 
 
@@ -92,8 +93,7 @@ async def health(session: AsyncSession = Depends(get_session)) -> HealthResponse
         services={
             "pipeline": {
                 "analyze_confirm": ["foods", "drinks", "medical"],
-                "ingestion": ["food", "drink", "document"],
-                "processing": ["food_ai", "ocr", "document_parser", "medical_extract"],
+                "processing": ["food_ai", "drink_label_ocr", "drink_ai_fallback", "ocr", "document_parser", "medical_extract"],
                 "storage": ["structured_db", "vector_db", "medical_reports"],
             },
             "structured_db": {
@@ -123,7 +123,7 @@ async def health(session: AsyncSession = Depends(get_session)) -> HealthResponse
                 "endpoint": settings.kimi_base_url,
                 "model": settings.kimi_vision_model,
                 "has_key": settings.has_kimi_key,
-                "used_for": "food",
+                "used_for": ["food", "drink_unlabeled_fallback"],
             },
             "content_understanding": {
                 "enabled": settings.content_understanding_enabled,
@@ -290,11 +290,11 @@ async def foods_confirm(
 @api.post(
     "/drinks/analyze",
     response_model=DrinkAnalyzeResponse,
-    summary="Upload drink label → normalized OCR (pending confirm)",
+    summary="Upload drink image → label OCR, or Kimi estimate if no label",
     tags=["drinks"],
 )
 async def drinks_analyze(
-    file: UploadFile = File(..., description="Drink nutrition label photo"),
+    file: UploadFile = File(..., description="Drink nutrition label or beverage photo"),
     user_id: str = Form("default"),
     session: AsyncSession = Depends(get_session),
 ) -> DrinkAnalyzeResponse:

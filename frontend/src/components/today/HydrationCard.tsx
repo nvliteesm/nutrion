@@ -277,7 +277,7 @@ export function HydrationCard({
         {Math.round(liveMl)} ml of {targetMl} ml · {cups} of {cupsCount} cups
       </p>
 
-      <div className="mt-4">
+      <div className="mt-3 flex flex-1 items-center justify-center">
         <WaterWaveDrop pct={overallPct} pouring={holding} />
       </div>
 

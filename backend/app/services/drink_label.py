@@ -1,4 +1,8 @@
-"""Drink label OCR → normalized nutrition fields."""
+"""Drink label OCR → normalized nutrition fields.
+
+Returns None when the image is not a readable nutrition label so callers can
+fall back to vision (Kimi) for unlabeled drink photos.
+"""
 
 from __future__ import annotations
 
@@ -9,11 +13,22 @@ from typing import Any
 from app.models.schemas import ConfirmationStatus, DrinkLabelData
 from app.services.azure_client import azure_client
 from app.services import ocr
+from app.services.input_validation import (
+    drink_has_usable_nutrients,
+    looks_like_nutrition_label,
+)
 
 logger = logging.getLogger(__name__)
 
 DRINK_EXTRACT_SYSTEM = """You extract structured drink nutrition-label data from OCR text.
+
+First decide whether the text is from a beverage Nutrition Facts / drink label.
+If it is NOT a drink nutrition label (random photo OCR, food menu, medical report,
+packaging without nutrient facts, empty/gibberish), set is_nutrition_label=false
+and leave nutrients at 0.
+
 Return JSON with keys:
+is_nutrition_label (boolean),
 product_name (string),
 serving_size (string),
 servings_per_container (number or null),
@@ -25,7 +40,8 @@ drink_volume_ml (number or null — convert fl oz to ml if needed: 1 fl oz ≈ 2
 sodium_mg (number or null),
 caffeine_mg (number or null),
 confidence (0-1).
-Use 0 when a nutrient is unknown. Prefer values explicitly on the label."""
+Use 0 when a nutrient is unknown. Prefer values explicitly on the label.
+Never invent a product just to fill the schema when is_nutrition_label is false."""
 
 
 def _num(pattern: str, text: str) -> float | None:
@@ -89,6 +105,7 @@ def stub_drink_from_ocr(raw_text: str) -> DrinkLabelData:
         caffeine_mg=caffeine,
         confidence=0.55 if has_numbers else 0.35,
         confirmation_status=ConfirmationStatus.pending,
+        analysis_mode="label",
         raw_text=text,
     )
 
@@ -125,19 +142,64 @@ def _drink_from_dict(data: dict[str, Any], raw_text: str) -> DrinkLabelData:
         caffeine_mg=opt_f("caffeine_mg"),
         confidence=float(data.get("confidence") or 0.75),
         confirmation_status=ConfirmationStatus.pending,
+        analysis_mode="label",
         raw_text=raw_text,
     )
 
 
-async def analyze_drink_label(path) -> DrinkLabelData:
-    """OCR drink label image → normalized DrinkLabelData (not yet confirmed)."""
-    raw_text = await ocr.extract_text_from_image(path)
-    if azure_client.enabled and raw_text.strip():
+def _accept_label_result(drink: DrinkLabelData, *, is_label: bool | None) -> DrinkLabelData | None:
+    """Return drink when OCR/LLM found a real nutrition label; else None."""
+    if is_label is False:
+        return None
+    has_nutrients = drink_has_usable_nutrients(
+        calories=drink.calories,
+        carbohydrates_g=drink.carbohydrates_g,
+        total_sugar_g=drink.total_sugar_g,
+        sodium_mg=drink.sodium_mg,
+        caffeine_mg=drink.caffeine_mg,
+        drink_volume_ml=drink.drink_volume_ml,
+        confidence=drink.confidence,
+    )
+    has_hints = looks_like_nutrition_label(drink.raw_text)
+    if has_nutrients:
+        return drink
+    if is_label is True and has_hints:
+        return drink
+    if has_hints and drink.confidence >= 0.55:
+        return drink
+    return None
+
+
+async def analyze_drink_label(path) -> DrinkLabelData | None:
+    """
+    OCR drink label image → DrinkLabelData, or None if no nutrition label found.
+
+    Callers should fall back to vision (Kimi) when this returns None.
+    """
+    raw_text = await ocr.extract_text_from_image(path, allow_stub=False)
+    if not raw_text.strip():
+        logger.info("Drink OCR empty — no label to parse")
+        return None
+
+    if azure_client.enabled:
         data = await azure_client.chat_json(DRINK_EXTRACT_SYSTEM, raw_text[:8000])
         if data:
+            is_label = data.get("is_nutrition_label")
+            if isinstance(is_label, str):
+                is_label = is_label.strip().lower() in {"true", "1", "yes"}
             drink = _drink_from_dict(data, raw_text)
             if not drink.raw_text:
                 drink.raw_text = raw_text
-            return drink
+            accepted = _accept_label_result(
+                drink,
+                is_label=bool(is_label) if is_label is not None else None,
+            )
+            if accepted is None:
+                logger.info("OCR text present but not a drink nutrition label")
+            return accepted
         logger.warning("Azure drink extract unavailable; using stub parser")
-    return stub_drink_from_ocr(raw_text)
+
+    if not looks_like_nutrition_label(raw_text):
+        return None
+    drink = stub_drink_from_ocr(raw_text)
+    return _accept_label_result(drink, is_label=None)

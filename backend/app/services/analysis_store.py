@@ -16,6 +16,7 @@ from app.models.schemas import (
     DrinkLabelData,
     ExtractedMeal,
     FoodAnalysisData,
+    FoodItemEstimate,
     IntakeRecord,
     MedicalMetricData,
     MedicalMetricRecord,
@@ -151,41 +152,60 @@ def drink_to_meal(drink: DrinkLabelData) -> ExtractedMeal:
     )
 
 
-def food_to_meal(food: FoodAnalysisData, name: str | None = None) -> ExtractedMeal:
-    if name:
-        meal_name = name
-    elif len(food.items) == 1:
-        meal_name = food.items[0].name
-    elif food.items:
-        meal_name = f"{food.items[0].name} + {len(food.items) - 1} more"
-    else:
-        meal_name = "Estimated meal"
-
-    serving = (
-        food.items[0].portion
-        if len(food.items) == 1
-        else f"{len(food.items)} items"
-    )
-    extras: dict[str, float] = {
-        "item_count": float(len(food.items)),
-    }
+def food_item_to_meal(item: FoodItemEstimate, *, raw_text: str = "") -> ExtractedMeal:
     return ExtractedMeal(
-        name=meal_name,
-        serving=serving,
+        name=item.name,
+        serving=item.portion,
         nutrients=NutrientValues(
-            calories=food.total_calories,
-            protein_g=food.total_protein_g,
-            carbs_g=food.total_carbs_g,
-            fat_g=food.total_fat_g,
-            fiber_g=food.total_fiber_g,
-            sugar_g=food.total_sugar_g,
-            sodium_mg=food.total_sodium_mg,
-            extras=extras,
+            calories=item.calories,
+            protein_g=item.protein_g,
+            carbs_g=item.carbs_g,
+            fat_g=item.fat_g,
+            fiber_g=item.fiber_g,
+            sugar_g=item.sugar_g,
+            sodium_mg=item.sodium_mg,
         ),
-        raw_text=food.raw_text or food.description,
-        confidence=food.confidence,
+        raw_text=raw_text
+        or (
+            f"{item.name} ({item.portion}): {item.calories} kcal, "
+            f"P {item.protein_g}g C {item.carbs_g}g F {item.fat_g}g"
+        ),
+        confidence=item.confidence,
         source="food_ai",
     )
+
+
+def food_to_meals(food: FoodAnalysisData) -> list[ExtractedMeal]:
+    """One ExtractedMeal per food item."""
+    if not food.items:
+        return [
+            ExtractedMeal(
+                name="Estimated meal",
+                serving="1 serving",
+                nutrients=NutrientValues(
+                    calories=food.total_calories,
+                    protein_g=food.total_protein_g,
+                    carbs_g=food.total_carbs_g,
+                    fat_g=food.total_fat_g,
+                    fiber_g=food.total_fiber_g,
+                    sugar_g=food.total_sugar_g,
+                    sodium_mg=food.total_sodium_mg,
+                ),
+                raw_text=food.raw_text or food.description,
+                confidence=food.confidence,
+                source="food_ai",
+            )
+        ]
+    return [food_item_to_meal(item) for item in food.items]
+
+
+def food_to_meal(food: FoodAnalysisData, name: str | None = None) -> ExtractedMeal:
+    """Back-compat: first item, or a named aggregate if `name` is provided."""
+    meals = food_to_meals(food)
+    if name and meals:
+        meals[0] = meals[0].model_copy(update={"name": name})
+        return meals[0]
+    return meals[0]
 
 
 async def save_medical_metrics(

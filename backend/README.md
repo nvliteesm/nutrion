@@ -138,17 +138,16 @@ curl -X POST http://127.0.0.1:8000/api/ai/analyze \
   -d "{\"question\": \"How was my sugar this week?\", \"user_id\": \"default\"}"
 ```
 
-There are also scripts under `scripts/` (e.g. `smoke_test.py`, `smoke_analytics.py`) you can run with the venv Python if present.
+There are also scripts under `scripts/` (e.g. `smoke_confirm_flow.py`, `smoke_analytics.py`) you can run with the venv Python if present.
 
 ## Main API areas
 
 | Area | Base path | Notes |
 |------|-----------|--------|
-| Confirm flow | `/api/foods`, `/api/drinks`, `/api/medical` | upload → analyze → confirm |
+| Confirm flow | `/api/foods`, `/api/drinks`, `/api/medical` | upload → analyze → confirm (drinks: label OCR, else Kimi) |
 | Memory + chat | `/chat`, `/memory/*` | vector meal memory + RAG |
 | Analytics | `/api/analytics/*` | SQL totals; no LLM math |
 | AI analyzer | `/api/ai/*` | grounded explanations + insights |
-| Legacy ingest | `/food`, `/drink`, `/document` | older one-shot ingest |
 | Storage helpers | `/intakes`, `/totals/daily`, `/vector/search` | list / totals / search |
 
 Full request/response shapes are in **Swagger**: `/docs`.

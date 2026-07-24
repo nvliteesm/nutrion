@@ -1,1 +1,1 @@
-"""Service layer for ingestion pipeline."""
+"""Service layer for NutriON analyze/confirm, analytics, and RAG."""

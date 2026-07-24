@@ -10,6 +10,7 @@ from typing import Any
 from app.models.schemas import MedicalCategory, MedicalMetricData, MetricStatus
 from app.services.azure_client import azure_client
 from app.services import document_parser, ocr
+from app.services.input_validation import MEDICAL_REJECT, UNREADABLE
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,10 @@ DEFAULT_RANGES: dict[str, tuple[float | None, float | None]] = {
 
 MEDICAL_EXTRACT_SYSTEM = """You extract ONLY these lab metrics from a medical report OCR/HTML text.
 
+First decide whether the text is from a medical / lab report that could contain
+blood sugar or lipid results. If it is NOT (drink label, food menu, random photo
+OCR, resume, etc.), set is_medical_report=false and return metrics=[].
+
 Blood Sugar
 - HbA1c (aliases: Glycosylated Hemoglobin, Glycated Hemoglobin, HbAlc OCR typo, A1c)
 - Fasting Blood Glucose (aliases: FBG, FBS, fasting sugar) — NOT estimated average glucose (eAG)
@@ -115,6 +120,7 @@ Rules:
 
 Return JSON:
 {
+  "is_medical_report": true|false,
   "metrics": [
     {
       "metric_name": "HbA1c" | "Fasting Blood Glucose" | "Total Cholesterol" | "LDL" | "HDL" | "Triglycerides",
@@ -382,7 +388,8 @@ async def _read_report_text(path) -> str:
     ext = path.suffix.lower()
     image_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
     if ext in image_exts:
-        return await ocr.extract_text_from_image(path)
+        # Never invent stub lab text for random photos.
+        return await ocr.extract_text_from_image(path, allow_stub=False)
     return await document_parser.parse_document(path)
 
 
@@ -401,12 +408,21 @@ def _merge_metrics(
 async def extract_medical_metrics(path) -> tuple[list[MedicalMetricData], str]:
     """OCR/parse → classify into blood_sugar/lipid fields only; omit missing."""
     raw_text = await _read_report_text(path)
+    if not (raw_text or "").strip():
+        raise ValueError(UNREADABLE)
+
     deterministic = stub_extract_medical(raw_text)
 
     llm_metrics: list[MedicalMetricData] = []
+    is_medical: bool | None = None
     if azure_client.enabled and raw_text.strip():
         data = await azure_client.chat_json(MEDICAL_EXTRACT_SYSTEM, raw_text[:12000])
         if data and isinstance(data.get("metrics"), list):
+            flag = data.get("is_medical_report")
+            if isinstance(flag, str):
+                is_medical = flag.strip().lower() in {"true", "1", "yes"}
+            elif isinstance(flag, bool):
+                is_medical = flag
             for item in data["metrics"]:
                 if isinstance(item, dict):
                     parsed = _metric_from_dict(item)
@@ -415,5 +431,10 @@ async def extract_medical_metrics(path) -> tuple[list[MedicalMetricData], str]:
         else:
             logger.warning("Azure medical extract empty/failed; using deterministic parser")
 
+    if is_medical is False and not llm_metrics and not deterministic:
+        raise ValueError(MEDICAL_REJECT)
+
     ordered = _merge_metrics(_dedupe_and_order(llm_metrics), deterministic)
+    if not ordered:
+        raise ValueError(MEDICAL_REJECT)
     return ordered, raw_text

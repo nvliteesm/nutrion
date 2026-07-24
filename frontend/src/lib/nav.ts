@@ -1,9 +1,9 @@
 import type { ComponentType, SVGProps } from "react";
 import {
   CalendarIcon,
-  CameraIcon,
   ChartIcon,
   HomeIcon,
+  UserIcon,
 } from "@/components/icons";
 
 type IconType = ComponentType<
@@ -16,12 +16,14 @@ export interface NavItem {
   icon: IconType;
   /** Marks a Premium-gated section (shows a PRO badge). */
   pro?: boolean;
+  /** Opens a sheet instead of navigating. */
+  sheet?: "profile";
 }
 
-/** Primary navigation for the desktop side rail (profile lives at the bottom). */
+/** Primary navigation for the desktop side rail. */
 export const navItems: NavItem[] = [
   { href: "/today", label: "Today", icon: HomeIcon },
-  { href: "/scan", label: "Scan", icon: CameraIcon },
   { href: "/history", label: "History", icon: CalendarIcon },
   { href: "/insights", label: "Insights", icon: ChartIcon, pro: true },
+  { href: "/profile", label: "Profile", icon: UserIcon, sheet: "profile" },
 ];

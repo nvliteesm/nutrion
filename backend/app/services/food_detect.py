@@ -8,18 +8,23 @@ from pathlib import Path
 
 from app.models.schemas import (
     ConfirmationStatus,
-    ExtractedMeal,
     FoodAnalysisData,
     FoodItemEstimate,
-    NutrientValues,
 )
+from app.services.input_validation import FOOD_REJECT
 from app.services.kimi_client import kimi_client
 
 logger = logging.getLogger(__name__)
 
 FOOD_DETECT_SYSTEM = """You identify food in a photo and estimate nutrition.
+
+If the image does NOT show edible food or a meal (random objects, people, scenery,
+documents, drink labels alone, screenshots, etc.), set is_food=false and return
+an empty items array. Do not invent food to fill the schema.
+
 Return JSON:
 {
+  "is_food": true|false,
   "description": "short scene description",
   "confidence": 0-1,
   "items": [
@@ -137,28 +142,6 @@ def stub_food_analysis(path: Path) -> FoodAnalysisData:
     )
 
 
-def stub_food_from_image(path: Path) -> ExtractedMeal:
-    """Back-compat for legacy ingest pipeline."""
-    analysis = stub_food_analysis(path)
-    item = analysis.items[0] if analysis.items else FoodItemEstimate(name="Unknown food")
-    return ExtractedMeal(
-        name=item.name,
-        serving=item.portion,
-        nutrients=NutrientValues(
-            calories=item.calories,
-            protein_g=item.protein_g,
-            carbs_g=item.carbs_g,
-            fat_g=item.fat_g,
-            fiber_g=item.fiber_g,
-            sugar_g=item.sugar_g,
-            sodium_mg=item.sodium_mg,
-        ),
-        raw_text=analysis.raw_text,
-        confidence=item.confidence,
-        source="food_ai_stub",
-    )
-
-
 async def analyze_food_image(path: Path | str) -> FoodAnalysisData:
     """Vision LLM food estimate (pending confirmation) via Kimi Vision."""
     path = Path(path)
@@ -167,67 +150,49 @@ async def analyze_food_image(path: Path | str) -> FoodAnalysisData:
         b64 = base64.b64encode(path.read_bytes()).decode("ascii")
         data = await kimi_client.vision_json(
             system=FOOD_DETECT_SYSTEM,
-            user_text="Identify foods and estimate portions + nutrients.",
+            user_text=(
+                "Identify foods and estimate portions + nutrients. "
+                "If this is not a food/meal photo, set is_food=false and items=[]."
+            ),
             image_b64=b64,
             mime=_mime_for(path),
         )
-        if data and isinstance(data.get("items"), list) and data["items"]:
-            items = [
-                _item_from_dict(item)
-                for item in data["items"]
-                if isinstance(item, dict)
-            ]
-            if not items:
-                return stub_food_analysis(path)
-            confidences = [i.confidence for i in items]
-            avg_conf = sum(confidences) / len(confidences)
-            overall = float(data.get("confidence") or avg_conf)
-            totals = _totals(items)
-            desc = str(data.get("description") or "").strip()
-            raw_parts = [desc] if desc else []
-            for it in items:
-                raw_parts.append(
-                    f"{it.name} ({it.portion}): {it.calories} kcal, "
-                    f"P {it.protein_g}g C {it.carbs_g}g F {it.fat_g}g"
-                )
-            return FoodAnalysisData(
-                items=items,
-                confidence=overall,
-                confirmation_status=ConfirmationStatus.pending,
-                description=desc or f"Detected {len(items)} item(s)",
-                raw_text="\n".join(raw_parts),
-                **totals,
+        if data is None:
+            raise ValueError(FOOD_REJECT)
+
+        is_food = data.get("is_food")
+        if isinstance(is_food, str):
+            is_food = is_food.strip().lower() in {"true", "1", "yes"}
+        raw_items = data.get("items") if isinstance(data.get("items"), list) else []
+        items = [
+            _item_from_dict(item)
+            for item in raw_items
+            if isinstance(item, dict)
+        ]
+
+        if is_food is False or not items:
+            raise ValueError(FOOD_REJECT)
+
+        confidences = [i.confidence for i in items]
+        avg_conf = sum(confidences) / len(confidences)
+        overall = float(data.get("confidence") or avg_conf)
+        totals = _totals(items)
+        desc = str(data.get("description") or "").strip()
+        raw_parts = [desc] if desc else []
+        for it in items:
+            raw_parts.append(
+                f"{it.name} ({it.portion}): {it.calories} kcal, "
+                f"P {it.protein_g}g C {it.carbs_g}g F {it.fat_g}g"
             )
-        logger.warning("Kimi food vision unavailable; using stub detection")
+        return FoodAnalysisData(
+            items=items,
+            confidence=overall,
+            confirmation_status=ConfirmationStatus.pending,
+            description=desc or f"Detected {len(items)} item(s)",
+            raw_text="\n".join(raw_parts),
+            **totals,
+        )
 
+    # Offline / no vision key: keep stub for local demos only.
+    logger.warning("Kimi food vision unavailable; using stub detection")
     return stub_food_analysis(path)
-
-
-async def detect_food(path: Path | str) -> ExtractedMeal:
-    """Legacy single-meal wrapper used by ingest pipeline."""
-    analysis = await analyze_food_image(path)
-    if not analysis.items:
-        return stub_food_from_image(Path(path))
-    item = analysis.items[0]
-    name = (
-        item.name
-        if len(analysis.items) == 1
-        else f"{item.name} + {len(analysis.items) - 1} more"
-    )
-    source = "food_ai_stub" if analysis.confidence <= 0.45 else "food_ai"
-    return ExtractedMeal(
-        name=name,
-        serving=item.portion if len(analysis.items) == 1 else f"{len(analysis.items)} items",
-        nutrients=NutrientValues(
-            calories=analysis.total_calories,
-            protein_g=analysis.total_protein_g,
-            carbs_g=analysis.total_carbs_g,
-            fat_g=analysis.total_fat_g,
-            fiber_g=analysis.total_fiber_g,
-            sugar_g=analysis.total_sugar_g,
-            sodium_mg=analysis.total_sodium_mg,
-        ),
-        raw_text=analysis.raw_text,
-        confidence=analysis.confidence,
-        source=source,
-    )

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   CalendarIcon,
@@ -10,51 +11,77 @@ import {
   HomeIcon,
   UserIcon,
 } from "@/components/icons";
+import { ProfileSheet } from "./ProfileSheet";
+import { LogEntrySheet } from "./LogEntrySheet";
 
 /**
  * Mobile bottom navigation with a raised centre Scan button.
- * Scan sits in the middle as the primary action; the other four flank it.
+ * Scan opens the log-entry sheet; Profile opens the profile sheet.
  */
 const left = [
   { href: "/today", label: "Today", icon: HomeIcon },
   { href: "/history", label: "History", icon: CalendarIcon },
 ];
-const right = [
-  { href: "/insights", label: "Insights", icon: ChartIcon },
-  { href: "/profile", label: "Profile", icon: UserIcon },
-];
+const right = [{ href: "/insights", label: "Insights", icon: ChartIcon }];
 
 export function BottomNav() {
   const pathname = usePathname();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-card px-0 pb-3.5 pt-2 md:hidden">
-      {left.map((item) => (
-        <NavButton
-          key={item.href}
-          {...item}
-          active={pathname.startsWith(item.href)}
-        />
-      ))}
+    <>
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-card px-0 pb-3.5 pt-2 md:hidden">
+        {left.map((item) => (
+          <NavButton
+            key={item.href}
+            {...item}
+            active={pathname.startsWith(item.href)}
+          />
+        ))}
 
-      <div className="flex justify-center">
-        <Link
-          href="/scan"
-          aria-label="Scan"
-          className="-mt-6 inline-flex h-[52px] w-[52px] items-center justify-center rounded-[18px] bg-teal text-white shadow-float"
+        <div className="flex justify-center">
+          <button
+            type="button"
+            aria-label="Log with camera"
+            onClick={() => setLogOpen(true)}
+            className="-mt-6 inline-flex h-[52px] w-[52px] items-center justify-center rounded-[18px] bg-teal text-white shadow-float"
+          >
+            <CameraIcon size={26} />
+          </button>
+        </div>
+
+        {right.map((item) => (
+          <NavButton
+            key={item.href}
+            {...item}
+            active={pathname.startsWith(item.href)}
+          />
+        ))}
+
+        <button
+          type="button"
+          onClick={() => setProfileOpen(true)}
+          className={cn(
+            "flex flex-col items-center gap-1",
+            profileOpen ? "text-teal-d" : "text-ink-3",
+          )}
         >
-          <CameraIcon size={26} />
-        </Link>
-      </div>
+          <UserIcon size={21} />
+          <span
+            className={cn(
+              "text-[9.5px]",
+              profileOpen ? "font-bold" : "font-semibold",
+            )}
+          >
+            Profile
+          </span>
+        </button>
+      </nav>
 
-      {right.map((item) => (
-        <NavButton
-          key={item.href}
-          {...item}
-          active={pathname.startsWith(item.href)}
-        />
-      ))}
-    </nav>
+      <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
+      <LogEntrySheet open={logOpen} onClose={() => setLogOpen(false)} />
+    </>
   );
 }
 

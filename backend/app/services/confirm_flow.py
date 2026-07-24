@@ -21,7 +21,7 @@ from app.models.schemas import (
     MedicalConfirmResponse,
     MedicalMetricData,
 )
-from app.services import analysis_store, drink_label, food_detect, medical_extract, vector_store
+from app.services import analysis_store, drink_detect, drink_label, food_detect, medical_extract, vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,11 @@ def _save_upload(file_bytes: bytes, filename: str) -> Path:
     return dest
 
 
-# ---- Drinks -----------------------------------------------------------------
+def _drink_intake_source(drink: DrinkLabelData) -> str:
+    return "drink_ai" if drink.analysis_mode == "photo" else "drink_ocr"
+
+
+# ---- Drinks (label OCR, then Kimi vision fallback) --------------------------
 
 async def analyze_drink(
     session: AsyncSession,
@@ -44,9 +48,21 @@ async def analyze_drink(
     user_id: str = "default",
 ) -> DrinkAnalyzeResponse:
     if not file_bytes or not filename:
-        raise ValueError("Drink label requires an uploaded image file")
+        raise ValueError("Drink scan requires an uploaded image file")
     path = _save_upload(file_bytes, filename)
+
+    # 1) Prefer nutrition-label OCR when present
     drink = await drink_label.analyze_drink_label(path)
+    if drink is not None:
+        drink.analysis_mode = "label"
+        message = "Normalized OCR result ready for review"
+    else:
+        # 2) No label → Kimi classifies drink vs food and estimates
+        logger.info("No drink label found; falling back to Kimi vision")
+        drink = await drink_detect.analyze_drink_photo(path)
+        drink.analysis_mode = "photo"
+        message = "No label found — drink photo estimate ready for review"
+
     row = await analysis_store.create_analysis(
         session,
         kind="drink",
@@ -55,7 +71,11 @@ async def analyze_drink(
         file_path=str(path),
         raw_text=drink.raw_text,
     )
-    return DrinkAnalyzeResponse(analysis_id=row.id, drink=drink)
+    return DrinkAnalyzeResponse(
+        analysis_id=row.id,
+        drink=drink,
+        message=message,
+    )
 
 
 async def get_drink_analysis(session: AsyncSession, analysis_id: str) -> DrinkAnalyzeResponse:
@@ -81,8 +101,14 @@ async def confirm_drink(
     if row.status == ConfirmationStatus.confirmed.value:
         raise ValueError("Analysis already confirmed")
 
+    # Preserve mode from stored analysis if client omitted it
+    stored = DrinkLabelData.model_validate(analysis_store.analysis_payload(row))
+    if not drink.analysis_mode:
+        drink.analysis_mode = stored.analysis_mode or "label"
+
     drink.confirmation_status = ConfirmationStatus.confirmed
     meal = analysis_store.drink_to_meal(drink)
+    source = _drink_intake_source(drink)
     extras = {
         "total_sugar_g": drink.total_sugar_g,
         "added_sugar_g": drink.added_sugar_g,
@@ -98,7 +124,7 @@ async def confirm_drink(
         session,
         meal,
         user_id=user_id or row.user_id,
-        source="drink_ocr",
+        source=source,
         kind="drink",
         file_path=row.file_path,
         analysis_id=row.id,
@@ -112,7 +138,7 @@ async def confirm_drink(
             meal,
             user_id=intake.user_id,
             intake_id=intake.id,
-            source="drink_ocr",
+            source=source,
             kind="drink",
         )
     except Exception:
@@ -186,35 +212,43 @@ async def confirm_food(
         food.confidence = sum(i.confidence for i in food.items) / len(food.items)
     food.confirmation_status = ConfirmationStatus.confirmed
 
-    meal = analysis_store.food_to_meal(food, name=name)
-    intake = await analysis_store.save_confirmed_intake(
-        session,
-        meal,
-        user_id=user_id or row.user_id,
-        source="food_ai",
-        kind="food",
-        file_path=row.file_path,
-        analysis_id=row.id,
-        extras={"item_count": float(len(food.items))},
-    )
+    meals = analysis_store.food_to_meals(food)
+    if name and len(meals) == 1:
+        meals[0] = meals[0].model_copy(update={"name": name})
+
+    intake_ids: list[int] = []
+    for meal in meals:
+        intake = await analysis_store.save_confirmed_intake(
+            session,
+            meal,
+            user_id=user_id or row.user_id,
+            source="food_ai",
+            kind="food",
+            file_path=row.file_path,
+            analysis_id=row.id,
+        )
+        intake_ids.append(intake.id)
+        try:
+            await vector_store.upsert_meal(
+                meal,
+                user_id=intake.user_id,
+                intake_id=intake.id,
+                source="food_ai",
+                kind="food",
+            )
+        except Exception:
+            logger.exception("Vector upsert failed for food intake %s", intake.id)
+
     await analysis_store.mark_confirmed(
         session, row, result=food.model_dump(mode="json")
     )
-    try:
-        await vector_store.upsert_meal(
-            meal,
-            user_id=intake.user_id,
-            intake_id=intake.id,
-            source="food_ai",
-            kind="food",
-        )
-    except Exception:
-        logger.exception("Vector upsert failed for food intake %s", intake.id)
 
     return FoodConfirmResponse(
         analysis_id=row.id,
-        intake_id=intake.id,
+        intake_id=intake_ids[0],
+        intake_ids=intake_ids,
         food=food,
+        message=f"Saved {len(intake_ids)} food item(s)",
     )
 
 

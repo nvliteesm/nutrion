@@ -12,6 +12,7 @@ import {
   confirmMedical,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { SCAN_RESUME_KEY } from "@/components/scan/ScanCaptureSheet";
 import { CameraCapture } from "@/components/scan/CameraCapture";
 import { CameraIcon } from "@/components/icons";
 import type {
@@ -106,7 +107,7 @@ const modes: {
 }[] = [
   {
     id: "drink",
-    title: "Drink",
+    title: "Scan drink",
     blurb:
       "Reads a nutrition label when present; otherwise AI estimates the beverage (rejects food).",
     accept: "image/*",
@@ -114,7 +115,7 @@ const modes: {
   },
   {
     id: "food",
-    title: "Food photo",
+    title: "Food",
     blurb: "Vision estimate of items and portions — always editable.",
     accept: "image/*",
     accent: "border-line bg-card",
@@ -146,25 +147,79 @@ export default function ScanPage() {
   const [food, setFood] = useState<FoodAnalysisData | null>(null);
   const [metrics, setMetrics] = useState<MedicalMetricData[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+  const [fromGallery, setFromGallery] = useState(false);
 
   const activeMode = useMemo(
     () => modes.find((m) => m.id === mode) ?? null,
     [mode],
   );
 
-  // Deep-link: /scan?mode=drink|food|medical jumps straight to that upload step.
+  // Deep-link: /scan?mode=… jumps to upload, or resume=1 loads a pre-analyzed result.
   useEffect(() => {
-    const m = new URLSearchParams(window.location.search).get("mode");
+    const params = new URLSearchParams(window.location.search);
+    const m = params.get("mode");
+    const source = params.get("source");
+    const resume = params.get("resume");
+    if (source === "gallery") setFromGallery(true);
+
+    if (resume === "1") {
+      try {
+        const raw = sessionStorage.getItem(SCAN_RESUME_KEY);
+        sessionStorage.removeItem(SCAN_RESUME_KEY);
+        if (raw) {
+          const data = JSON.parse(raw) as {
+            mode: ScanMode;
+            analysis_id: string;
+            drink?: DrinkLabelData;
+            food?: FoodAnalysisData;
+            metrics?: MedicalMetricData[];
+          };
+          if (data.mode === "drink" && data.drink) {
+            setMode("drink");
+            setAnalysisId(data.analysis_id);
+            setDrink(data.drink);
+            setStep("review");
+            return;
+          }
+          if (data.mode === "food" && data.food) {
+            setMode("food");
+            setAnalysisId(data.analysis_id);
+            setFood(data.food);
+            setStep("review");
+            return;
+          }
+          if (data.mode === "medical" && data.metrics) {
+            setMode("medical");
+            setAnalysisId(data.analysis_id);
+            setMetrics(data.metrics);
+            setStep("review");
+            return;
+          }
+        }
+      } catch {
+        /* fall through to normal deep-link */
+      }
+    }
+
     if (m === "drink" || m === "food" || m === "medical") {
       setMode(m);
       setStep("upload");
     }
   }, []);
 
+  // Auto-open gallery file picker when arriving via source=gallery.
+  useEffect(() => {
+    if (step === "upload" && fromGallery && !busy && fileRef.current) {
+      const t = window.setTimeout(() => fileRef.current?.click(), 250);
+      return () => window.clearTimeout(t);
+    }
+  }, [step, fromGallery, busy]);
+
   function resetAll() {
     setStep("pick");
     setMode(null);
     setBusy(false);
+    setFromGallery(false);
     setError(null);
     setPreviewUrl((url) => {
       if (url) URL.revokeObjectURL(url);
@@ -374,24 +429,55 @@ export default function ScanPage() {
             className="hidden"
             onChange={onFileChange}
           />
-          <Button
-            fullWidth
-            size="lg"
-            disabled={busy}
-            onClick={() => setCameraOpen(true)}
-          >
-            <CameraIcon size={18} />
-            {busy ? "Analyzing…" : "Take photo"}
-          </Button>
-          <Button
-            variant="outline"
-            fullWidth
-            size="lg"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-          >
-            Choose file
-          </Button>
+          {fromGallery || mode === "medical" ? (
+            <>
+              <Button
+                fullWidth
+                size="lg"
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {busy
+                  ? "Analyzing…"
+                  : mode === "medical"
+                    ? "Upload report"
+                    : "Choose from gallery"}
+              </Button>
+              {mode !== "medical" && (
+                <Button
+                  variant="outline"
+                  fullWidth
+                  size="lg"
+                  disabled={busy}
+                  onClick={() => setCameraOpen(true)}
+                >
+                  <CameraIcon size={18} />
+                  Take photo instead
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button
+                fullWidth
+                size="lg"
+                disabled={busy}
+                onClick={() => setCameraOpen(true)}
+              >
+                <CameraIcon size={18} />
+                {busy ? "Analyzing…" : "Take photo"}
+              </Button>
+              <Button
+                variant="outline"
+                fullWidth
+                size="lg"
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                Choose from gallery
+              </Button>
+            </>
+          )}
           <Button variant="ghost" fullWidth disabled={busy} onClick={resetAll}>
             Back
           </Button>

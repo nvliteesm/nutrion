@@ -71,6 +71,5 @@ async def root() -> dict[str, object]:
                 "POST /api/medical/{analysisId}/confirm",
             ],
         },
-        "legacy_ingestion": ["/food", "/drink", "/document"],
         "storage": ["/intakes", "/totals/daily", "/api/medical/metrics", "/vector/search"],
     }

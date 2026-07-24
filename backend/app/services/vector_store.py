@@ -140,7 +140,7 @@ async def upsert_meal(
     source: str,
     kind: str = "food",
 ) -> str:
-    """Module-level API used by ingest/confirm (delegates to Chroma VectorStore)."""
+    """Module-level API used by confirm flow (delegates to Chroma VectorStore)."""
     n = meal.nutrients
     document = (
         f"[{kind}] {meal.name}. Serving {meal.serving}. "

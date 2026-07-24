@@ -165,6 +165,18 @@ export const ChevronLeftIcon = (p: IconProps) => (
   </Stroke>
 );
 
+export const ChevronUpIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <path d="m18 15-6-6-6 6" />
+  </Stroke>
+);
+
+export const ChevronDownIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Stroke>
+);
+
 export const LockIcon = (p: IconProps) => (
   <Stroke {...p}>
     <rect width="18" height="11" x="3" y="11" rx="2" />

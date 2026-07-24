@@ -5,13 +5,6 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
-class InputType(str, Enum):
-    food = "food"
-    drink = "drink"
-    document = "document"
-    medical = "medical"
-
-
 class ConfirmationStatus(str, Enum):
     pending = "pending"
     confirmed = "confirmed"
@@ -32,7 +25,7 @@ class MedicalCategory(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Shared nutrient / meal models (legacy ingest)
+# Shared nutrient / meal models
 # ---------------------------------------------------------------------------
 
 
@@ -56,16 +49,6 @@ class ExtractedMeal(BaseModel):
     source: str = "extractor"
 
 
-class IngestResponse(BaseModel):
-    input_type: InputType
-    meal: Optional[ExtractedMeal] = None
-    intake_id: Optional[int] = None
-    message: str
-
-
-OrchestrateResponse = IngestResponse
-
-
 # ---------------------------------------------------------------------------
 # Drink label (OCR → normalize → confirm)
 # ---------------------------------------------------------------------------
@@ -84,13 +67,15 @@ class DrinkLabelData(BaseModel):
     caffeine_mg: Optional[float] = None
     confidence: float = 0.5
     confirmation_status: ConfirmationStatus = ConfirmationStatus.pending
+    # "label" = OCR nutrition facts; "photo" = Kimi vision estimate
+    analysis_mode: str = "label"
     raw_text: str = ""
 
 
 class DrinkAnalyzeResponse(BaseModel):
     analysis_id: str
     drink: DrinkLabelData
-    message: str = "Normalized OCR result ready for review"
+    message: str = "Drink result ready for review"
 
 
 class DrinkConfirmRequest(BaseModel):
@@ -242,7 +227,8 @@ class FoodConfirmRequest(BaseModel):
 
 class FoodConfirmResponse(BaseModel):
     analysis_id: str
-    intake_id: int
+    intake_id: int  # first intake id (back-compat)
+    intake_ids: list[int] = Field(default_factory=list)
     food: FoodAnalysisData
     message: str = "Estimated nutrition entry saved"
 
@@ -429,6 +415,17 @@ class IntakeRecord(BaseModel):
 class StorageStatus(BaseModel):
     structured: dict[str, Any]
     vector: dict[str, Any]
+
+
+class WaterSipRequest(BaseModel):
+    user_id: str = "default"
+    ml: float = 30
+
+
+class WaterSipResponse(BaseModel):
+    intake_id: int
+    ml: float
+    message: str = "Water sip logged"
 
 
 class HealthResponse(BaseModel):
