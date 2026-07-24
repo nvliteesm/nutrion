@@ -58,6 +58,8 @@ export interface IntakeEntry {
   portion?: string;
   /** Volume in millilitres for drinks and water. */
   volumeMl?: number;
+  /** Photo URL (backend /uploads/... or local data URL). */
+  imageUrl?: string;
   nutrients: Nutrients;
   /**
    * AI estimates are shown as ranges to avoid false precision.
@@ -78,6 +80,8 @@ export interface NutritionTargets {
 
 export type GoalSource = "user" | "nutrion";
 
+export type Sex = "female" | "male" | "other";
+
 /** Default targets for new users (before they customize). */
 export const DEFAULT_TARGETS: NutritionTargets = {
   calories: 2000,
@@ -95,6 +99,53 @@ export interface UserProfile {
   targets: NutritionTargets;
   goalSource: GoalSource;
   streakDays: number;
+  /** Optional body data used for sugar-barrier recommendations. */
+  age?: number | null;
+  sex?: Sex | null;
+  height_cm?: number | null;
+  sugarBarrierNote?: string;
+}
+
+/** One confirmed medical lab upload from the backend. */
+export interface MedicalReportSummary {
+  id: number;
+  user_id: string;
+  analysis_id: string;
+  test_date: string | null;
+  file_path: string;
+  confidence: number;
+  confirmed: boolean;
+  notes: string;
+  hba1c: number | null;
+  hba1c_status: string | null;
+  fasting_glucose: number | null;
+  fasting_glucose_status: string | null;
+  total_cholesterol: number | null;
+  total_cholesterol_status: string | null;
+  ldl: number | null;
+  ldl_status: string | null;
+  hdl: number | null;
+  hdl_status: string | null;
+  triglycerides: number | null;
+  triglycerides_status: string | null;
+  created_at: string;
+}
+
+export interface SugarBarrierResult {
+  calories: number;
+  sugar_limit_g: number;
+  monthly_sugar_limit_g: number;
+  water_cups: number;
+  rationale: string;
+  source: "kimi" | "rules";
+  confidence: number;
+  based_on: {
+    hba1c?: number | null;
+    fasting_glucose?: number | null;
+    age?: number | null;
+    sex?: string | null;
+    height_cm?: number | null;
+  };
 }
 
 /** Values extracted from a scanned drink nutrition label (per serving). */
@@ -298,4 +349,5 @@ export interface MedicalConfirmResponse {
   metric_ids: number[];
   metrics: MedicalMetricData[];
   message: string;
+  sugar_barrier?: SugarBarrierResult | null;
 }

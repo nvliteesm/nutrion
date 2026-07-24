@@ -12,7 +12,7 @@ export default function AuthLayout({
 }) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-app-bg px-4 py-10">
-      <Link href="/" aria-label="NutriON home" className="mb-6 text-navy">
+      <Link href="/" aria-label="NutriON home" className="mb-6 text-ink">
         <Logo />
       </Link>
 

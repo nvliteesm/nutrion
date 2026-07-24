@@ -6,8 +6,8 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   CameraIcon,
-  ChartIcon,
   ChatIcon,
+  FileTextIcon,
   HomeIcon,
   UserIcon,
 } from "@/components/icons";
@@ -16,13 +16,14 @@ import { LogEntrySheet } from "./LogEntrySheet";
 
 /**
  * Mobile bottom navigation with a raised centre Scan button.
- * Scan opens the log-entry sheet; Profile opens the profile sheet.
+ * Medical (lab records) + AI Chat both included; Insights lives on the
+ * desktop side rail and Profile sheet links.
  */
 const left = [
   { href: "/today", label: "Today", icon: HomeIcon },
-  { href: "/history", label: "AI Chat", icon: ChatIcon },
+  { href: "/medical", label: "Medical", icon: FileTextIcon },
 ];
-const right = [{ href: "/insights", label: "Insights", icon: ChartIcon }];
+const right = [{ href: "/history", label: "Chat", icon: ChatIcon }];
 
 export function BottomNav() {
   const pathname = usePathname();

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +18,7 @@ from app.services.vector_store import vector_store
 
 def meal_to_document(meal: ExtractedMeal, *, logged_at: Optional[datetime] = None) -> str:
     n = meal.nutrients
-    when = (logged_at or datetime.utcnow()).isoformat(timespec="seconds")
+    when = (logged_at or datetime.now(timezone.utc)).isoformat(timespec="seconds")
     return (
         f"Meal: {meal.name}\n"
         f"Serving: {meal.serving}\n"

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, ProgressRing } from "@/components/ui";
-import type { DailyStatus } from "@/lib/types";
+import { sugarBand, sugarBandStyles } from "@/lib/nutrition";
 import { cn } from "@/lib/cn";
 
 export function SugarCard({
@@ -15,22 +15,8 @@ export function SugarCard({
 }) {
   const left = Math.max(target - sugar, 0);
   const pct = target > 0 ? Math.round((sugar / target) * 100) : 0;
-  const status: DailyStatus =
-    sugar > target ? "above" : sugar >= target * 0.85 ? "approaching" : "within";
-
-  const ringColor =
-    status === "above"
-      ? "text-red"
-      : status === "approaching"
-        ? "text-amber"
-        : "text-teal";
-
-  const badge =
-    status === "above"
-      ? { label: "Over limit", cls: "bg-red-t text-red-d" }
-      : status === "approaching"
-        ? { label: "Getting close", cls: "bg-amber-t text-amber-d" }
-        : { label: "Within target", cls: "bg-teal-t text-teal-d" };
+  const band = sugarBand(sugar, target);
+  const styles = sugarBandStyles(band);
 
   return (
     <Card
@@ -44,11 +30,16 @@ export function SugarCard({
               value={sugar}
               max={target}
               strokeWidth={9}
-              colorClass={ringColor}
+              colorClass={styles.ring}
               trackClass="text-line"
               className="h-full w-full"
             >
-              <span className="text-[20px] font-extrabold leading-none text-ink md:text-[22px]">
+              <span
+                className={cn(
+                  "text-[20px] font-extrabold leading-none md:text-[22px]",
+                  styles.value,
+                )}
+              >
                 {pct}%
               </span>
               <span className="mt-1 text-[10px] font-semibold leading-none text-ink-3 md:text-[11px]">
@@ -62,7 +53,12 @@ export function SugarCard({
           <h2 className="text-[22px] font-extrabold leading-tight tracking-tight text-ink md:text-[24px]">
             Sugar intake
           </h2>
-          <div className="mt-3 text-[28px] font-extrabold leading-none text-ink md:text-[32px]">
+          <div
+            className={cn(
+              "mt-3 text-[28px] font-extrabold leading-none md:text-[32px]",
+              styles.value,
+            )}
+          >
             {Math.round(sugar)}
             <span className="text-[16px] font-extrabold"> g</span>
           </div>
@@ -75,10 +71,10 @@ export function SugarCard({
           <span
             className={cn(
               "mt-3 inline-flex max-w-full truncate self-start rounded-full px-2.5 py-1 text-[11px] font-bold",
-              badge.cls,
+              styles.badge,
             )}
           >
-            {badge.label}
+            {styles.label}
           </span>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import type { MedicalMetric } from "./types";
+import type { MedicalMetric, MedicalReportSummary } from "./types";
 
 /** True when the value falls outside the printed reference range. */
 export function outOfRange(metric: MedicalMetric): boolean {
@@ -31,4 +31,50 @@ export function linkedInsight(
     return "One or more confirmed values appear outside the printed reference range. Consider discussing these results with a healthcare professional.";
   }
   return null;
+}
+
+/** Which lab panels are present on a saved report. */
+export type ReportPanel = "blood_sugar" | "lipid" | "both" | "none";
+
+export function hasBloodSugar(report: MedicalReportSummary): boolean {
+  return report.hba1c != null || report.fasting_glucose != null;
+}
+
+export function hasLipidProfile(report: MedicalReportSummary): boolean {
+  return (
+    report.total_cholesterol != null ||
+    report.ldl != null ||
+    report.hdl != null ||
+    report.triglycerides != null
+  );
+}
+
+export function reportPanel(report: MedicalReportSummary): ReportPanel {
+  const sugar = hasBloodSugar(report);
+  const lipid = hasLipidProfile(report);
+  if (sugar && lipid) return "both";
+  if (sugar) return "blood_sugar";
+  if (lipid) return "lipid";
+  return "none";
+}
+
+export function reportPanelMeta(panel: ReportPanel): {
+  label: string;
+  short: string;
+  tone: "teal" | "blue" | "amber" | "neutral";
+} {
+  switch (panel) {
+    case "blood_sugar":
+      return { label: "Blood sugar", short: "Blood sugar", tone: "amber" };
+    case "lipid":
+      return { label: "Cholesterol", short: "Cholesterol", tone: "blue" };
+    case "both":
+      return {
+        label: "Blood sugar + Cholesterol",
+        short: "Both",
+        tone: "teal",
+      };
+    default:
+      return { label: "No metrics", short: "Empty", tone: "neutral" };
+  }
 }

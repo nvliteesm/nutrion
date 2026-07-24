@@ -5,6 +5,7 @@ export type BadgeTone =
   | "teal"
   | "blue"
   | "amber"
+  | "orange"
   | "red"
   | "navy"
   | "neutral";
@@ -17,6 +18,7 @@ const tones: Record<BadgeTone, string> = {
   teal: "bg-teal-t text-teal-d",
   blue: "bg-blue-t text-blue-d",
   amber: "bg-amber-t text-amber-d",
+  orange: "bg-orange-t text-orange-d",
   red: "bg-red-t text-red-d",
   navy: "bg-navy text-white",
   neutral: "bg-navy/[0.07] text-ink-2",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +40,7 @@ async def save_medical_metric(
     body: MedicalMetricCreate,
 ) -> MedicalMetricRecord:
     """Demo helper: create a one-metric medical report row."""
-    measured = body.measured_at or datetime.utcnow()
+    measured = body.measured_at or datetime.now(timezone.utc)
     flag = _derive_flag(body.value, body.range_low, body.range_high, body.flag)
     display = (body.display_name or body.metric_key or "metric").strip()
     canonical = canonicalize_metric_name(display) or canonicalize_metric_name(body.metric_key)

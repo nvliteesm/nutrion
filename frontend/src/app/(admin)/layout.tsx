@@ -30,7 +30,7 @@ export default function AdminLayout({
   return (
     <div className="flex min-h-full">
       <aside className="sticky top-0 hidden h-dvh w-[220px] shrink-0 flex-col border-r border-line bg-card md:flex">
-        <div className="flex items-center gap-2.5 px-5 py-5 text-navy">
+        <div className="flex items-center gap-2.5 px-5 py-5 text-ink">
           <Logo />
         </div>
         <span className="mb-2 px-5 text-[10px] font-bold tracking-widest text-ink-3">
@@ -60,7 +60,7 @@ export default function AdminLayout({
         <div className="mt-auto border-t border-line px-5 py-4">
           <Link
             href="/today"
-            className="text-[12px] font-semibold text-ink-3 hover:text-navy"
+            className="text-[12px] font-semibold text-ink-3 hover:text-ink"
           >
             ← Back to app
           </Link>

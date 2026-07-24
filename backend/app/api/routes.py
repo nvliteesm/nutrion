@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,21 +23,25 @@ from app.models.schemas import (
     FoodConfirmResponse,
     HealthResponse,
     IntakeRecord,
+    IntakeUpdateRequest,
     MedicalAnalyzeResponse,
     MedicalConfirmRequest,
     MedicalConfirmResponse,
     MedicalMetricRecord,
     MedicalReportRecord,
+    MedicalReportUpdateRequest,
     NutrientValues,
     StorageStatus,
+    SugarBarrierRequest,
+    SugarBarrierResponse,
     WaterSipRequest,
     WaterSipResponse,
 )
 from app.services import analysis_store, confirm_flow, structured_store, vector_store
+from app.services.confirm_flow import _save_upload
 
 router = APIRouter()
 api = APIRouter(prefix="/api")
-
 
 class VectorSearchRequest(BaseModel):
     query: str
@@ -326,6 +332,42 @@ async def medical_reports_list(
     )
 
 
+@api.patch(
+    "/medical/reports/{report_id}",
+    response_model=MedicalReportRecord,
+    summary="Update a saved medical report",
+    tags=["medical"],
+)
+async def medical_report_update(
+    report_id: int,
+    body: MedicalReportUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+) -> MedicalReportRecord:
+    row = await analysis_store.update_medical_report(
+        session,
+        report_id,
+        body.model_dump(exclude_unset=True),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Medical report not found")
+    return row
+
+
+@api.delete(
+    "/medical/reports/{report_id}",
+    summary="Delete a saved medical report",
+    tags=["medical"],
+)
+async def medical_report_delete(
+    report_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    ok = await analysis_store.delete_medical_report(session, report_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Medical report not found")
+    return {"ok": True, "id": report_id}
+
+
 @api.get(
     "/medical/{analysis_id}",
     response_model=MedicalAnalyzeResponse,
@@ -359,11 +401,58 @@ async def medical_confirm(
             analysis_id,
             body.metrics,
             user_id=body.user_id or "default",
+            age=body.age,
+            sex=body.sex,
+            height_cm=body.height_cm,
+            compute_sugar_barrier=body.compute_sugar_barrier,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@api.post(
+    "/profile/sugar-barrier",
+    response_model=SugarBarrierResponse,
+    summary="Recommend daily calorie + sugar intake from labs + profile (Kimi)",
+    tags=["profile"],
+)
+@api.post(
+    "/medical/recommend-intake",
+    response_model=SugarBarrierResponse,
+    summary="Recommend daily calorie + sugar intake from labs + profile (Kimi)",
+    tags=["medical"],
+)
+async def profile_sugar_barrier(
+    body: SugarBarrierRequest,
+    session: AsyncSession = Depends(get_session),
+) -> SugarBarrierResponse:
+    from app.services.sugar_barrier import recommend_sugar_barrier
+
+    hba1c = body.hba1c
+    fasting = body.fasting_glucose
+    if body.use_latest_labs and (hba1c is None or fasting is None):
+        reports = await analysis_store.list_medical_reports(
+            session,
+            user_id=body.user_id or None,
+            limit=1,
+        )
+        if reports:
+            latest = reports[0]
+            if hba1c is None:
+                hba1c = latest.hba1c
+            if fasting is None:
+                fasting = latest.fasting_glucose
+
+    result = await recommend_sugar_barrier(
+        age=body.age,
+        sex=body.sex,
+        height_cm=body.height_cm,
+        hba1c=hba1c,
+        fasting_glucose=fasting,
+    )
+    return SugarBarrierResponse.model_validate(result)
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +494,68 @@ async def get_intake(
     if not row:
         raise HTTPException(status_code=404, detail="Intake not found")
     return row
+
+
+@router.patch(
+    "/intakes/{intake_id}",
+    response_model=IntakeRecord,
+    summary="Update one structured intake",
+    tags=["storage"],
+)
+async def update_intake(
+    intake_id: int,
+    body: IntakeUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+) -> IntakeRecord:
+    row = await structured_store.update_intake(
+        session,
+        intake_id,
+        name=body.name,
+        serving=body.serving,
+        nutrients=body.nutrients,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Intake not found")
+    return row
+
+
+@router.post(
+    "/intakes/{intake_id}/image",
+    response_model=IntakeRecord,
+    summary="Add or replace an intake photo",
+    tags=["storage"],
+)
+async def upload_intake_image(
+    intake_id: int,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+) -> IntakeRecord:
+    row = await session.get(Intake, intake_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Intake not found")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    path = _save_upload(raw, file.filename or "photo.jpg")
+    row.file_path = str(path)
+    await session.commit()
+    await session.refresh(row)
+    return structured_store.intake_to_record(row)
+
+
+@router.get(
+    "/uploads/{filename}",
+    summary="Serve a stored upload",
+    tags=["storage"],
+)
+async def get_upload(filename: str) -> FileResponse:
+    safe = Path(filename).name
+    if not safe or safe != filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = Path(settings.upload_dir) / safe
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)
 
 
 @router.delete(

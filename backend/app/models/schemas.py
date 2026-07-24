@@ -120,6 +120,51 @@ class MedicalAnalyzeResponse(BaseModel):
 class MedicalConfirmRequest(BaseModel):
     metrics: list[MedicalMetricData]
     user_id: str = "default"
+    age: Optional[float] = None
+    sex: Optional[str] = None
+    height_cm: Optional[float] = None
+    compute_sugar_barrier: bool = True
+
+
+class MedicalReportUpdateRequest(BaseModel):
+    """Partial update for a saved medical lab report."""
+
+    test_date: Optional[date] = None
+    notes: Optional[str] = None
+    hba1c: Optional[float] = None
+    hba1c_status: Optional[str] = None
+    fasting_glucose: Optional[float] = None
+    fasting_glucose_status: Optional[str] = None
+    total_cholesterol: Optional[float] = None
+    total_cholesterol_status: Optional[str] = None
+    ldl: Optional[float] = None
+    ldl_status: Optional[str] = None
+    hdl: Optional[float] = None
+    hdl_status: Optional[str] = None
+    triglycerides: Optional[float] = None
+    triglycerides_status: Optional[str] = None
+
+
+class SugarBarrierRequest(BaseModel):
+    user_id: str = "default"
+    age: Optional[float] = None
+    sex: Optional[str] = None
+    height_cm: Optional[float] = None
+    hba1c: Optional[float] = None
+    fasting_glucose: Optional[float] = None
+    # Pull latest labs from DB when metrics not provided.
+    use_latest_labs: bool = True
+
+
+class SugarBarrierResponse(BaseModel):
+    calories: float = 2000
+    sugar_limit_g: float
+    monthly_sugar_limit_g: float
+    water_cups: float = 8
+    rationale: str
+    source: str = "rules"
+    confidence: float = 0.5
+    based_on: dict[str, Any] = Field(default_factory=dict)
 
 
 class MedicalConfirmResponse(BaseModel):
@@ -128,6 +173,7 @@ class MedicalConfirmResponse(BaseModel):
     metric_ids: list[int] = Field(default_factory=list)  # back-compat: [report_id]
     metrics: list[MedicalMetricData]
     message: str = "Medical report saved"
+    sugar_barrier: Optional[SugarBarrierResponse] = None
 
 
 class MedicalMetricRecord(BaseModel):
@@ -410,6 +456,14 @@ class IntakeRecord(BaseModel):
     raw_text: str = ""
     file_path: str = ""
     analysis_id: str = ""
+
+
+class IntakeUpdateRequest(BaseModel):
+    """Partial update for an existing intake row."""
+
+    name: Optional[str] = None
+    serving: Optional[str] = None
+    nutrients: Optional[NutrientValues] = None
 
 
 class StorageStatus(BaseModel):

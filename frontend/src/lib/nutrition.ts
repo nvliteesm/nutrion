@@ -69,8 +69,8 @@ export function deriveStatus(
   // Very light logging for the day — treat as incomplete rather than "within".
   if (entryCount < 2 && worst < 0.4) return "incomplete";
 
-  if (worst > 1) return "above";
-  if (worst >= 0.85) return "approaching";
+  if (worst >= 0.75) return "above";
+  if (worst >= 0.5) return "approaching";
   return "within";
 }
 
@@ -101,6 +101,56 @@ export function buildDailyTotals(
 export function progress(value: number, max: number): number {
   if (max <= 0) return 0;
   return Math.min(Math.max(value / max, 0), 1);
+}
+
+/** Sugar load band for color cues (yellow → orange → red). */
+export type SugarBand = "ok" | "yellow" | "orange" | "red";
+
+export function sugarBand(sugar: number, target: number): SugarBand {
+  if (target <= 0) return sugar > 0 ? "red" : "ok";
+  const pct = (sugar / target) * 100;
+  if (pct >= 75) return "red";
+  if (pct >= 50) return "orange";
+  if (pct >= 25) return "yellow";
+  return "ok";
+}
+
+export function sugarBandStyles(band: SugarBand): {
+  ring: string;
+  badge: string;
+  label: string;
+  value: string;
+} {
+  switch (band) {
+    case "red":
+      return {
+        ring: "text-red",
+        badge: "bg-red-t text-red-d",
+        label: "High",
+        value: "text-red-d",
+      };
+    case "orange":
+      return {
+        ring: "text-orange",
+        badge: "bg-orange-t text-orange-d",
+        label: "Elevated",
+        value: "text-orange-d",
+      };
+    case "yellow":
+      return {
+        ring: "text-amber",
+        badge: "bg-amber-t text-amber-d",
+        label: "Watch",
+        value: "text-amber-d",
+      };
+    default:
+      return {
+        ring: "text-teal",
+        badge: "bg-teal-t text-teal-d",
+        label: "Within target",
+        value: "text-ink",
+      };
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-"""Kimi (Moonshot) Vision client — used for food photo analysis."""
+"""Kimi (Moonshot) client — food vision + text JSON helpers."""
 
 from __future__ import annotations
 
@@ -27,6 +27,16 @@ def _parse_json_content(content: str) -> dict[str, Any]:
     return json.loads(text)
 
 
+def _message_content(data: dict[str, Any]) -> str:
+    content = data["choices"][0]["message"]["content"]
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "") if isinstance(part, dict) else str(part)
+            for part in content
+        )
+    return str(content)
+
+
 class KimiVisionClient:
     def __init__(self) -> None:
         self.base_url = settings.kimi_base_url.rstrip("/")
@@ -42,6 +52,45 @@ class KimiVisionClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+
+    async def chat_json(
+        self,
+        *,
+        system: str,
+        user_text: str,
+        temperature: float | None = None,
+    ) -> dict[str, Any] | None:
+        """Text-only JSON completion (sugar barrier, explanations, etc.)."""
+        if not self.enabled:
+            return None
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_text},
+            ],
+        }
+        if temperature is not None:
+            payload["temperature"] = temperature
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self._headers(),
+                    json=payload,
+                )
+                if resp.status_code >= 400:
+                    logger.error(
+                        "Kimi chat_json %s: %s",
+                        resp.status_code,
+                        resp.text[:500],
+                    )
+                    resp.raise_for_status()
+                return _parse_json_content(_message_content(resp.json()))
+        except Exception:
+            logger.exception("Kimi chat_json failed")
+            return None
 
     async def vision_json(
         self,
@@ -88,14 +137,7 @@ class KimiVisionClient:
                         resp.text[:500],
                     )
                     resp.raise_for_status()
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"]
-                if isinstance(content, list):
-                    content = "".join(
-                        part.get("text", "") if isinstance(part, dict) else str(part)
-                        for part in content
-                    )
-                return _parse_json_content(str(content))
+                return _parse_json_content(_message_content(resp.json()))
         except Exception:
             logger.exception("Kimi vision_json failed")
             return None

@@ -6,12 +6,18 @@ import {
   getCurrentUser,
   getTodayEntries,
   getTodayTotals,
+  listMedicalReports,
 } from "@/lib/api";
-import { getToday } from "@/lib/date";
+import { getToday, localDayKey } from "@/lib/date";
 import { firstName, formatDateLong, greeting } from "@/lib/format";
 import { buildMonthGrid, groupByDate } from "@/lib/history";
 import { waterMl } from "@/lib/nutrition";
-import type { DailyTotals, IntakeEntry, UserProfile } from "@/lib/types";
+import type {
+  DailyTotals,
+  IntakeEntry,
+  MedicalReportSummary,
+  UserProfile,
+} from "@/lib/types";
 import { FlameIcon, PlusIcon } from "@/components/icons";
 import { DashboardSkeleton } from "@/components/today/DashboardSkeleton";
 import { SugarCard } from "@/components/today/SugarCard";
@@ -27,6 +33,12 @@ interface DashboardData {
   totals: DailyTotals;
   todayEntries: IntakeEntry[];
   allEntries: IntakeEntry[];
+  reports: MedicalReportSummary[];
+}
+
+function reportDateKey(report: MedicalReportSummary): string {
+  if (report.test_date) return report.test_date.slice(0, 10);
+  return localDayKey(report.created_at);
 }
 
 export default function TodayPage() {
@@ -47,8 +59,9 @@ export default function TodayPage() {
       getTodayTotals(),
       getTodayEntries(),
       getAllEntries(),
-    ]).then(([user, totals, todayEntries, allEntries]) => {
-      setData({ user, totals, todayEntries, allEntries });
+      listMedicalReports(),
+    ]).then(([user, totals, todayEntries, allEntries, reports]) => {
+      setData({ user, totals, todayEntries, allEntries, reports });
     });
   }, []);
 
@@ -60,6 +73,17 @@ export default function TodayPage() {
     () => groupByDate(data?.allEntries ?? []),
     [data?.allEntries],
   );
+
+  const reportsByDate = useMemo(() => {
+    const map = new Map<string, MedicalReportSummary[]>();
+    for (const report of data?.reports ?? []) {
+      const key = reportDateKey(report);
+      const list = map.get(key) ?? [];
+      list.push(report);
+      map.set(key, list);
+    }
+    return map;
+  }, [data?.reports]);
 
   const grid = useMemo(
     () =>
@@ -81,6 +105,7 @@ export default function TodayPage() {
   );
 
   const selectedEntries = byDate.get(selectedIso) ?? [];
+  const selectedReports = reportsByDate.get(selectedIso) ?? [];
 
   if (!data) return <DashboardSkeleton />;
 
@@ -136,6 +161,7 @@ export default function TodayPage() {
         <HydrationCard
           ml={ml}
           targetCups={user.targets.water_cups}
+          waterEntries={todayEntries.filter((e) => e.type === "water")}
           onChanged={refresh}
           delay={0.1}
         />
@@ -143,30 +169,37 @@ export default function TodayPage() {
 
       <QuickActions delay={0.15} />
 
-      <div className="grid items-start gap-4 md:grid-cols-2 md:gap-5">
-        <MonthCalendar
-          monthLabel={monthLabel}
-          cells={grid}
-          selectedIso={selectedIso}
-          todayIso={todayIso}
-          onSelect={setSelectedIso}
-          onPrev={() => stepMonth(-1)}
-          onNext={() => stepMonth(1)}
-          delay={0.28}
-        />
-        <DayDetail
-          dateIso={selectedIso}
-          entries={selectedEntries}
-          targets={user.targets}
-          onSelectEntry={setSelectedEntry}
-          delay={0.33}
-        />
+      <div className="grid items-stretch gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:gap-4">
+        <div className="min-w-0">
+          <MonthCalendar
+            monthLabel={monthLabel}
+            cells={grid}
+            selectedIso={selectedIso}
+            todayIso={todayIso}
+            onSelect={setSelectedIso}
+            onPrev={() => stepMonth(-1)}
+            onNext={() => stepMonth(1)}
+            delay={0.28}
+            medicalDates={new Set(reportsByDate.keys())}
+          />
+        </div>
+        <div className="min-w-0 md:h-full">
+          <DayDetail
+            dateIso={selectedIso}
+            entries={selectedEntries}
+            targets={user.targets}
+            medicalReports={selectedReports}
+            onSelectEntry={setSelectedEntry}
+            delay={0.33}
+          />
+        </div>
       </div>
 
       {selectedEntry && (
         <EntryDetailModal
           entry={selectedEntry}
           onClose={() => setSelectedEntry(null)}
+          onChanged={refresh}
         />
       )}
 

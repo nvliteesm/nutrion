@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.models.schemas import ConfirmationStatus, DrinkLabelData
-from app.services.input_validation import DRINK_FOOD_REJECT, DRINK_PHOTO_REJECT
+from app.services.input_validation import DRINK_FOOD_REJECT, DRINK_PHOTO_REJECT, DRINK_REJECT
 from app.services.kimi_client import kimi_client
 
 logger = logging.getLogger(__name__)
@@ -22,8 +22,9 @@ Classify the main subject:
 
 Rules:
 - If content_type is "food" or "other", set is_drink=false and leave nutrients at 0.
-- Do not invent a drink for food photos.
+- Do not invent a drink for food photos or non-drink scenes.
 - If content_type is "drink", estimate nutrition for the visible serving.
+- Reject anything that is not clearly a beverage.
 
 Return JSON:
 {
@@ -160,7 +161,7 @@ async def analyze_drink_photo(path: Path | str) -> DrinkLabelData:
     if content_type == "food":
         raise ValueError(DRINK_FOOD_REJECT)
     if content_type != "drink":
-        raise ValueError(DRINK_PHOTO_REJECT)
+        raise ValueError(DRINK_REJECT)
 
     drink = _drink_from_dict(data)
     if (

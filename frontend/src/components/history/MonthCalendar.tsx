@@ -14,6 +14,7 @@ import {
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const LEGEND: CalendarStatus[] = [
   "within",
+  "elevated",
   "moderate",
   "significant",
   "incomplete",
@@ -29,6 +30,7 @@ export function MonthCalendar({
   onPrev,
   onNext,
   delay = 0,
+  medicalDates,
 }: {
   monthLabel: string;
   cells: DayCell[];
@@ -38,6 +40,7 @@ export function MonthCalendar({
   onPrev: () => void;
   onNext: () => void;
   delay?: number;
+  medicalDates?: Set<string>;
 }) {
   const [hoveredIso, setHoveredIso] = useState<string | null>(null);
 
@@ -98,6 +101,7 @@ export function MonthCalendar({
           const isSelected = cell.dateIso === selectedIso;
           const isToday = cell.dateIso === todayIso;
           const hasDot = Boolean(cell.status && cell.status !== "none");
+          const hasMedical = Boolean(medicalDates?.has(cell.dateIso));
           const col = i % 7;
           const showTip = hoveredIso === cell.dateIso && !cell.isFuture;
 
@@ -121,12 +125,17 @@ export function MonthCalendar({
                 )}
               >
                 <span className="leading-none">{cell.day}</span>
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    hasDot ? calendarColor[cell.status!] : "bg-transparent",
+                <span className="flex items-center gap-0.5">
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      hasDot ? calendarColor[cell.status!] : "bg-transparent",
+                    )}
+                  />
+                  {hasMedical && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber" />
                   )}
-                />
+                </span>
               </button>
 
               <AnimatePresence>
@@ -176,6 +185,12 @@ export function MonthCalendar({
             {calendarLabel[status]}
           </span>
         ))}
+        {medicalDates && medicalDates.size > 0 && (
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber" />
+            Medical report
+          </span>
+        )}
       </div>
     </Card>
   );

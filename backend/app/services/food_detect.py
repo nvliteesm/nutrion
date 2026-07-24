@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import logging
 from pathlib import Path
 
 from app.models.schemas import (
@@ -14,13 +13,15 @@ from app.models.schemas import (
 from app.services.input_validation import FOOD_REJECT
 from app.services.kimi_client import kimi_client
 
-logger = logging.getLogger(__name__)
+FOOD_DETECT_SYSTEM = """You identify food in a photo and estimate nutrition via vision.
 
-FOOD_DETECT_SYSTEM = """You identify food in a photo and estimate nutrition.
-
-If the image does NOT show edible food or a meal (random objects, people, scenery,
-documents, drink labels alone, screenshots, etc.), set is_food=false and return
+If the image does NOT show edible food or a meal, set is_food=false and return
 an empty items array. Do not invent food to fill the schema.
+
+Set is_food=false for:
+- drinks / beverages alone (cans, bottles, cups of liquid without a meal)
+- people, scenery, documents, screenshots, random objects
+- empty plates / packaging with no food visible
 
 Return JSON:
 {
@@ -105,94 +106,62 @@ def _item_from_dict(data: dict) -> FoodItemEstimate:
     )
 
 
-def stub_food_analysis(path: Path) -> FoodAnalysisData:
-    name = path.stem.replace("_", " ").replace("-", " ")
-    parts = name.split(" ", 1)
-    if len(parts) == 2 and len(parts[0]) >= 16:
-        name = parts[1]
-    name = (name.strip() or "Unknown food").title()
-    item = FoodItemEstimate(
-        name=name,
-        portion="1 serving",
-        portion_grams=250,
-        calories=350,
-        protein_g=20,
-        carbs_g=35,
-        fat_g=12,
-        fiber_g=4,
-        sugar_g=8,
-        sodium_mg=400,
-        calories_low=300,
-        calories_high=400,
-        confidence=0.4,
-    )
-    totals = _totals([item])
-    raw = (
-        f"Food photo detected (stub AI): {name}\n"
-        f"Estimated nutrients for 1 serving.\n"
-        f"Calories 350 Protein 20g Carbs 35g Fat 12g Fiber 4g Sugars 8g Sodium 400mg"
-    )
-    return FoodAnalysisData(
-        items=[item],
-        confidence=0.4,
-        confirmation_status=ConfirmationStatus.pending,
-        description=f"Stub estimate for {name}",
-        raw_text=raw,
-        **totals,
-    )
-
-
 async def analyze_food_image(path: Path | str) -> FoodAnalysisData:
-    """Vision LLM food estimate (pending confirmation) via Kimi Vision."""
+    """Vision LLM food estimate (pending confirmation) via Kimi Vision.
+
+    Rejects when the image is not food or when Kimi is unavailable.
+    """
     path = Path(path)
 
-    if kimi_client.enabled:
-        b64 = base64.b64encode(path.read_bytes()).decode("ascii")
-        data = await kimi_client.vision_json(
-            system=FOOD_DETECT_SYSTEM,
-            user_text=(
-                "Identify foods and estimate portions + nutrients. "
-                "If this is not a food/meal photo, set is_food=false and items=[]."
-            ),
-            image_b64=b64,
-            mime=_mime_for(path),
-        )
-        if data is None:
-            raise ValueError(FOOD_REJECT)
-
-        is_food = data.get("is_food")
-        if isinstance(is_food, str):
-            is_food = is_food.strip().lower() in {"true", "1", "yes"}
-        raw_items = data.get("items") if isinstance(data.get("items"), list) else []
-        items = [
-            _item_from_dict(item)
-            for item in raw_items
-            if isinstance(item, dict)
-        ]
-
-        if is_food is False or not items:
-            raise ValueError(FOOD_REJECT)
-
-        confidences = [i.confidence for i in items]
-        avg_conf = sum(confidences) / len(confidences)
-        overall = float(data.get("confidence") or avg_conf)
-        totals = _totals(items)
-        desc = str(data.get("description") or "").strip()
-        raw_parts = [desc] if desc else []
-        for it in items:
-            raw_parts.append(
-                f"{it.name} ({it.portion}): {it.calories} kcal, "
-                f"P {it.protein_g}g C {it.carbs_g}g F {it.fat_g}g"
-            )
-        return FoodAnalysisData(
-            items=items,
-            confidence=overall,
-            confirmation_status=ConfirmationStatus.pending,
-            description=desc or f"Detected {len(items)} item(s)",
-            raw_text="\n".join(raw_parts),
-            **totals,
+    if not kimi_client.enabled:
+        raise ValueError(
+            "Food photo AI is unavailable. "
+            "Please try again when Kimi vision is configured."
         )
 
-    # Offline / no vision key: keep stub for local demos only.
-    logger.warning("Kimi food vision unavailable; using stub detection")
-    return stub_food_analysis(path)
+    b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    data = await kimi_client.vision_json(
+        system=FOOD_DETECT_SYSTEM,
+        user_text=(
+            "Identify foods and estimate portions + nutrients. "
+            "If this is not a food/meal photo (including drink-only images), "
+            "set is_food=false and items=[]."
+        ),
+        image_b64=b64,
+        mime=_mime_for(path),
+    )
+    if data is None:
+        raise ValueError(FOOD_REJECT)
+
+    is_food = data.get("is_food")
+    if isinstance(is_food, str):
+        is_food = is_food.strip().lower() in {"true", "1", "yes"}
+    raw_items = data.get("items") if isinstance(data.get("items"), list) else []
+    items = [
+        _item_from_dict(item)
+        for item in raw_items
+        if isinstance(item, dict)
+    ]
+
+    if is_food is False or not items:
+        raise ValueError(FOOD_REJECT)
+
+    confidences = [i.confidence for i in items]
+    avg_conf = sum(confidences) / len(confidences)
+    overall = float(data.get("confidence") or avg_conf)
+    totals = _totals(items)
+    desc = str(data.get("description") or "").strip()
+    raw_parts = [desc] if desc else []
+    for it in items:
+        raw_parts.append(
+            f"{it.name} ({it.portion}): {it.calories} kcal, "
+            f"P {it.protein_g}g C {it.carbs_g}g F {it.fat_g}g"
+        )
+    return FoodAnalysisData(
+        items=items,
+        confidence=overall,
+        confirmation_status=ConfirmationStatus.pending,
+        description=desc or f"Detected {len(items)} item(s)",
+        raw_text="\n".join(raw_parts),
+        **totals,
+    )

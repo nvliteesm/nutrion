@@ -28,6 +28,10 @@ const nextConfig: NextConfig = {
         source: "/health",
         destination: `${BACKEND_URL}/health`,
       },
+      {
+        source: "/uploads/:path*",
+        destination: `${BACKEND_URL}/uploads/:path*`,
+      },
     ];
   },
 };

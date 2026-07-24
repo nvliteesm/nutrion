@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.orm import Intake
 from app.models.schemas import DailyTotals, ExtractedMeal, IntakeRecord, NutrientValues
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 async def save_intake(
@@ -42,7 +46,6 @@ async def save_intake(
         sugar_g=n.sugar_g,
         sodium_mg=n.sodium_mg,
         extras_json=json.dumps(n.extras or {}),
-        logged_at=datetime.utcnow(),
     )
     session.add(row)
     await session.commit()
@@ -94,6 +97,42 @@ async def delete_intake(session: AsyncSession, intake_id: int) -> bool:
     await session.delete(row)
     await session.commit()
     return True
+
+
+async def update_intake(
+    session: AsyncSession,
+    intake_id: int,
+    *,
+    name: str | None = None,
+    serving: str | None = None,
+    nutrients: NutrientValues | None = None,
+) -> IntakeRecord | None:
+    row = await session.get(Intake, intake_id)
+    if not row:
+        return None
+    if name is not None:
+        row.name = name.strip() or row.name
+    if serving is not None:
+        row.serving = serving
+    if nutrients is not None:
+        row.calories = nutrients.calories
+        row.protein_g = nutrients.protein_g
+        row.carbs_g = nutrients.carbs_g
+        row.fat_g = nutrients.fat_g
+        row.fiber_g = nutrients.fiber_g
+        row.sugar_g = nutrients.sugar_g
+        row.sodium_mg = nutrients.sodium_mg
+        try:
+            existing = {
+                k: float(v) for k, v in json.loads(row.extras_json or "{}").items()
+            }
+        except Exception:
+            existing = {}
+        existing.update(nutrients.extras or {})
+        row.extras_json = json.dumps(existing)
+    await session.commit()
+    await session.refresh(row)
+    return intake_to_record(row)
 
 
 async def list_intakes(

@@ -15,10 +15,11 @@ export function EditEntryDialog({
 }: {
   entry: IntakeEntry;
   onClose: () => void;
-  onSave: (id: string, patch: Partial<IntakeEntry>) => void;
+  onSave: (id: string, patch: Partial<IntakeEntry>) => void | Promise<void>;
 }) {
   const [name, setName] = useState(entry.name);
   const [n, setN] = useState({ ...entry.nutrients });
+  const [saving, setSaving] = useState(false);
 
   const num = (key: keyof typeof n) => ({
     value: n[key] ?? 0,
@@ -27,9 +28,16 @@ export function EditEntryDialog({
       setN((prev) => ({ ...prev, [key]: parseNonNegative(e.target.value) })),
   });
 
-  function handleSave() {
-    onSave(entry.id, { name: name.trim() || entry.name, nutrients: { ...n } });
-    onClose();
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSave(entry.id, {
+        name: name.trim() || entry.name,
+        nutrients: { ...n },
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const isWater = entry.type === "water";
@@ -37,7 +45,7 @@ export function EditEntryDialog({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-navy-ink/40 p-0 md:items-center md:p-4"
-      onClick={onClose}
+      onClick={saving ? undefined : onClose}
     >
       <div
         className="w-full max-w-[440px] animate-slide-up rounded-t-card-lg bg-card p-5 md:animate-scale-in md:rounded-card-lg"
@@ -45,7 +53,13 @@ export function EditEntryDialog({
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[17px] font-extrabold text-ink">Edit entry</h2>
-          <button onClick={onClose} aria-label="Close" className="text-ink-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Close"
+            className="text-ink-3 disabled:opacity-50"
+          >
             <XIcon size={20} />
           </button>
         </div>
@@ -80,18 +94,20 @@ export function EditEntryDialog({
           )}
           {isWater && (
             <p className="col-span-2 text-[13px] font-medium text-ink-2">
-              Water entries only track volume — edit or remove it below.
+              Water entries only track volume — use Remove on the entry card instead.
             </p>
           )}
         </div>
 
         <div className="mt-5 flex gap-2.5">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" disabled={saving} onClick={onClose}>
             Cancel
           </Button>
-          <Button fullWidth onClick={handleSave}>
-            Save changes
-          </Button>
+          {!isWater && (
+            <Button fullWidth disabled={saving} onClick={() => void handleSave()}>
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          )}
         </div>
       </div>
     </div>

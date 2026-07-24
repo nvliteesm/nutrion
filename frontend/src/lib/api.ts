@@ -1,6 +1,8 @@
 import { getToday, localDayKey } from "./date";
-import { getEntries } from "./store";
+import { deleteEntry, getEntries, updateEntry } from "./store";
 import { buildDailyTotals } from "./nutrition";
+import { getStoredProfile } from "./profile";
+import { getStoredSession } from "./auth";
 import type {
   Confidence,
   DailyTotals,
@@ -13,16 +15,33 @@ import type {
   IntakeEntry,
   MedicalAnalyzeResponse,
   MedicalConfirmResponse,
+  MedicalReportSummary,
   Nutrients,
+  SugarBarrierResult,
   UserProfile,
 } from "./types";
-import { DEFAULT_TARGETS } from "./types";
-import { getStoredSession } from "./auth";
 
 /**
  * API layer — all data from the backend (Supabase) + local manual entries.
  * No hardcoded/mock data.
  */
+
+/**
+ * Long AI analyze calls (15–90s) go straight to FastAPI in the browser.
+ * Next.js rewrites drop mid-request when Turbopack recompiles, which was
+ * surfacing as "backend restarted or timed out" on food/medical upload.
+ */
+function analyzeApiBase(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  if (typeof window !== "undefined") return "http://127.0.0.1:8000";
+  return "";
+}
+
+function analyzeUrl(path: string): string {
+  const base = analyzeApiBase();
+  return base ? `${base}${path}` : path;
+}
 
 /** Shape of a backend IntakeRecord. */
 interface BackendIntake {
@@ -34,6 +53,7 @@ interface BackendIntake {
   source: string;
   confidence: number;
   confirmed: boolean;
+  file_path?: string;
   nutrients: {
     calories: number;
     protein_g: number;
@@ -58,6 +78,13 @@ function mapConfidence(score: number): Confidence {
   if (score >= 0.75) return "high";
   if (score >= 0.5) return "medium";
   return "low";
+}
+
+function filePathToUrl(filePath?: string): string | undefined {
+  if (!filePath) return undefined;
+  const name = filePath.replace(/\\/g, "/").split("/").pop();
+  if (!name) return undefined;
+  return `/uploads/${name}`;
 }
 
 function adaptBackendIntake(r: BackendIntake): IntakeEntry {
@@ -85,6 +112,7 @@ function adaptBackendIntake(r: BackendIntake): IntakeEntry {
     confirmed: r.confirmed,
     portion: r.serving,
     volumeMl: extras.drink_volume_ml,
+    imageUrl: filePathToUrl(r.file_path),
     nutrients,
   };
 }
@@ -112,15 +140,20 @@ function mergeEntries(
 
 export function getCurrentUser(): Promise<UserProfile> {
   const session = getStoredSession();
+  const stored = getStoredProfile();
   const profile: UserProfile = {
     id: session?.userId ?? "guest",
     fullName: session?.fullName ?? "User",
     email: session?.email ?? "",
     initials: session?.initials ?? "U",
     subscription: session?.subscription ?? "free",
-    targets: DEFAULT_TARGETS,
-    goalSource: "user",
+    targets: stored.targets,
+    goalSource: stored.goalSource,
     streakDays: 0,
+    age: stored.personal.age,
+    sex: stored.personal.sex,
+    height_cm: stored.personal.height_cm,
+    sugarBarrierNote: stored.sugarBarrierNote,
   };
   return Promise.resolve(profile);
 }
@@ -140,7 +173,124 @@ export async function getTodayTotals(): Promise<DailyTotals> {
   const today = getToday();
   const all = await getAllEntries();
   const todays = all.filter((e) => localDayKey(e.loggedAt) === today);
-  return buildDailyTotals(today, todays, DEFAULT_TARGETS);
+  return buildDailyTotals(today, todays, getStoredProfile().targets);
+}
+
+export async function listMedicalReports(
+  userId = "default",
+  limit = 50,
+): Promise<MedicalReportSummary[]> {
+  try {
+    const res = await fetch(
+      `/api/medical/reports?user_id=${encodeURIComponent(userId)}&limit=${limit}`,
+    );
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
+export type MedicalReportPatch = Partial<
+  Pick<
+    MedicalReportSummary,
+    | "test_date"
+    | "notes"
+    | "hba1c"
+    | "hba1c_status"
+    | "fasting_glucose"
+    | "fasting_glucose_status"
+    | "total_cholesterol"
+    | "total_cholesterol_status"
+    | "ldl"
+    | "ldl_status"
+    | "hdl"
+    | "hdl_status"
+    | "triglycerides"
+    | "triglycerides_status"
+  >
+>;
+
+export async function patchMedicalReport(
+  reportId: number,
+  patch: MedicalReportPatch,
+): Promise<MedicalReportSummary> {
+  const res = await fetch(`/api/medical/reports/${reportId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) await apiError(res);
+  return res.json();
+}
+
+export async function deleteMedicalReport(reportId: number): Promise<void> {
+  const res = await fetch(`/api/medical/reports/${reportId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) await apiError(res);
+}
+
+export async function calculateSugarBarrier(input: {
+  age?: number | null;
+  sex?: string | null;
+  height_cm?: number | null;
+  hba1c?: number | null;
+  fasting_glucose?: number | null;
+  user_id?: string;
+}): Promise<SugarBarrierResult> {
+  const { recommendIntakeLocal } = await import("./intakeRecommend");
+  const fallback = () =>
+    recommendIntakeLocal({
+      age: input.age,
+      sex: input.sex,
+      height_cm: input.height_cm,
+      hba1c: input.hba1c,
+      fasting_glucose: input.fasting_glucose,
+    });
+
+  try {
+    const res = await fetch("/api/medical/recommend-intake", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: input.user_id ?? "default",
+        age: input.age ?? null,
+        sex: input.sex ?? null,
+        height_cm: input.height_cm ?? null,
+        hba1c: input.hba1c ?? null,
+        fasting_glucose: input.fasting_glucose ?? null,
+        use_latest_labs: true,
+      }),
+    });
+    if (!res.ok) {
+      // Legacy path if older backend only has /profile/sugar-barrier
+      const legacy = await fetch("/api/profile/sugar-barrier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: input.user_id ?? "default",
+          age: input.age ?? null,
+          sex: input.sex ?? null,
+          height_cm: input.height_cm ?? null,
+          hba1c: input.hba1c ?? null,
+          fasting_glucose: input.fasting_glucose ?? null,
+          use_latest_labs: true,
+        }),
+      });
+      if (!legacy.ok) return fallback();
+      const legacyData = (await legacy.json()) as SugarBarrierResult;
+      if (legacyData.calories == null) legacyData.calories = fallback().calories;
+      if (legacyData.water_cups == null) legacyData.water_cups = fallback().water_cups;
+      return legacyData;
+    }
+    const data = (await res.json()) as SugarBarrierResult;
+    if (data.calories == null) data.calories = fallback().calories;
+    if (data.water_cups == null) data.water_cups = fallback().water_cups;
+    return data;
+  } catch {
+    return fallback();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -156,8 +306,13 @@ async function apiError(res: Response): Promise<never> {
     detail = res.statusText;
   }
   if (typeof detail !== "string") detail = JSON.stringify(detail);
-  if (res.status === 500 && detail === "Internal Server Error") {
-    detail = "The backend encountered an error. Try again or use a different image.";
+  // Next.js rewrite returns a bare 500 when the backend reloads / hangs up mid-request.
+  if (
+    res.status === 500 &&
+    (detail === "Internal Server Error" || detail === "Error" || !detail.trim())
+  ) {
+    detail =
+      "The backend restarted or timed out. Wait a moment and try again, or use a different image.";
   }
   throw new Error(detail);
 }
@@ -166,7 +321,7 @@ export async function analyzeDrink(file: File, userId = "default"): Promise<Drin
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId);
-  const res = await fetch("/api/drinks/analyze", { method: "POST", body: form });
+  const res = await fetch(analyzeUrl("/api/drinks/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
@@ -185,7 +340,7 @@ export async function analyzeFood(file: File, userId = "default"): Promise<FoodA
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId);
-  const res = await fetch("/api/foods/analyze", { method: "POST", body: form });
+  const res = await fetch(analyzeUrl("/api/foods/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
@@ -204,16 +359,32 @@ export async function analyzeMedical(file: File, userId = "default"): Promise<Me
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId);
-  const res = await fetch("/api/medical/analyze", { method: "POST", body: form });
+  const res = await fetch(analyzeUrl("/api/medical/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
 
-export async function confirmMedical(analysisId: string, metrics: unknown[], userId = "default"): Promise<MedicalConfirmResponse> {
+export async function confirmMedical(
+  analysisId: string,
+  metrics: unknown[],
+  userId = "default",
+  profile?: {
+    age?: number | null;
+    sex?: string | null;
+    height_cm?: number | null;
+  },
+): Promise<MedicalConfirmResponse> {
   const res = await fetch(`/api/medical/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ metrics, user_id: userId }),
+    body: JSON.stringify({
+      metrics,
+      user_id: userId,
+      age: profile?.age ?? null,
+      sex: profile?.sex ?? null,
+      height_cm: profile?.height_cm ?? null,
+      compute_sugar_barrier: true,
+    }),
   });
   if (!res.ok) await apiError(res);
   return res.json();
@@ -283,4 +454,79 @@ export async function transcribeAudio(
   }
   if (!res.ok) await apiError(res);
   return res.json();
+}
+
+/** Remove a local or backend entry. */
+export async function removeEntry(entry: IntakeEntry): Promise<void> {
+  if (entry.id.startsWith("be_")) {
+    await deleteIntake(entry.id);
+  } else {
+    deleteEntry(entry.id);
+  }
+}
+
+/** Patch a local or backend entry's name/nutrients. */
+export async function patchEntry(
+  id: string,
+  patch: Partial<IntakeEntry>,
+): Promise<void> {
+  if (id.startsWith("be_")) {
+    const body: Record<string, unknown> = {};
+    if (patch.name !== undefined) body.name = patch.name;
+    if (patch.portion !== undefined) body.serving = patch.portion;
+    if (patch.nutrients) {
+      const n = patch.nutrients;
+      const extras: Record<string, number> = {
+        total_sugar_g: n.totalSugar_g,
+        added_sugar_g: n.addedSugar_g,
+      };
+      if (n.caffeine_mg != null) extras.caffeine_mg = n.caffeine_mg;
+      if (patch.volumeMl != null) extras.drink_volume_ml = patch.volumeMl;
+      body.nutrients = {
+        calories: n.calories,
+        protein_g: n.protein_g,
+        carbs_g: n.carbs_g,
+        fat_g: n.fat_g,
+        fiber_g: 0,
+        sugar_g: n.totalSugar_g,
+        sodium_mg: 0,
+        extras,
+      };
+    }
+    const res = await fetch(`/intakes/${id.replace(/^be_/, "")}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) await apiError(res);
+  } else {
+    updateEntry(id, patch);
+  }
+}
+
+/** Add or replace a photo on an entry. Returns the new image URL. */
+export async function uploadEntryImage(
+  entry: IntakeEntry,
+  file: File,
+): Promise<string> {
+  if (entry.id.startsWith("be_")) {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/intakes/${entry.id.replace(/^be_/, "")}/image`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) await apiError(res);
+    const row = (await res.json()) as BackendIntake;
+    return filePathToUrl(row.file_path) ?? "";
+  }
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Could not read image"));
+    reader.readAsDataURL(file);
+  });
+  updateEntry(entry.id, { imageUrl: dataUrl });
+  return dataUrl;
 }

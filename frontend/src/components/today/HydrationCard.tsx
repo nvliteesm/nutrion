@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card, useToast } from "@/components/ui";
 import { deleteIntake, logWaterSip } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import type { IntakeEntry } from "@/lib/types";
 import { WaterWaveDrop } from "./WaterWaveDrop";
 
 const SIP_ML = 30;
@@ -18,15 +19,19 @@ const WATER_TOAST_ID = "water-log";
  * Hold-to-fill water card.
  * Display ml only rises while held (never snaps down).
  * Release freezes at the current value (any ml, not only 30s).
+ * Minus always removes 30 ml (or whatever is left).
  */
 export function HydrationCard({
   ml,
   targetCups,
+  waterEntries = [],
   onChanged,
   delay = 0,
 }: {
   ml: number;
   targetCups: number;
+  /** Today's water intakes (newest-first preferred) for − when session stack is empty. */
+  waterEntries?: IntakeEntry[];
   onChanged?: () => void;
   delay?: number;
 }) {
@@ -170,37 +175,97 @@ export function HydrationCard({
     }
   }
 
+  /** Remove up to `amount` ml from known intake ids (session stack + today's entries). */
+  async function removeWaterMl(amount: number): Promise<number> {
+    let left = amount;
+    const removedIds = new Set<number>();
+
+    async function takeChunk(id: number, chunkMl: number) {
+      if (chunkMl <= left) {
+        await deleteIntake(id);
+        left -= chunkMl;
+        return;
+      }
+      // Partial: delete whole sip, re-log the remainder.
+      await deleteIntake(id);
+      const keep = Math.round(chunkMl - left);
+      left = 0;
+      if (keep >= MIN_COMMIT_ML) {
+        const res = await logWaterSip(keep);
+        sipStack.current.push({ id: res.intake_id, ml: keep });
+      }
+    }
+
+    while (left > 0 && sipStack.current.length > 0) {
+      const last = sipStack.current.pop()!;
+      removedIds.add(last.id);
+      await takeChunk(last.id, last.ml);
+    }
+
+    if (left > 0) {
+      const backend = [...waterEntries]
+        .filter((e) => e.type === "water" && e.id.startsWith("be_"))
+        .sort((a, b) => (a.loggedAt < b.loggedAt ? 1 : -1));
+
+      for (const entry of backend) {
+        if (left <= 0) break;
+        const id = Number(entry.id.replace(/^be_/, ""));
+        if (!Number.isFinite(id) || removedIds.has(id)) continue;
+        const entryMl = Math.round(entry.volumeMl ?? 0);
+        if (entryMl < MIN_COMMIT_ML) continue;
+        await takeChunk(id, entryMl);
+      }
+    }
+
+    return amount - left;
+  }
+
   async function undoSip() {
-    const last = sipStack.current.pop();
-    if (last == null) {
+    const available = Math.round(displayRef.current);
+    if (available < MIN_COMMIT_ML) {
       toast({
         id: WATER_TOAST_ID,
         title: "Nothing to undo",
-        description: "Hold to pour first",
+        description: "No water logged yet",
         variant: "info",
       });
       return;
     }
+
+    const removeMl = Math.min(SIP_ML, available);
     undoingRef.current = true;
-    const next = Math.max(0, displayRef.current - last.ml);
+    const next = Math.max(0, displayRef.current - removeMl);
     displayRef.current = next;
-    loggedRef.current = Math.max(0, loggedRef.current - last.ml);
+    loggedRef.current = Math.max(0, loggedRef.current - removeMl);
     setDisplayMl(next);
+
     try {
-      await deleteIntake(last.id);
+      const removed = await removeWaterMl(removeMl);
+      if (removed < MIN_COMMIT_ML) {
+        toast({
+          id: WATER_TOAST_ID,
+          title: "Couldn't remove water",
+          description: "No water entries to undo",
+          variant: "error",
+        });
+        undoingRef.current = false;
+        displayRef.current += removeMl;
+        loggedRef.current += removeMl;
+        setDisplayMl(displayRef.current);
+        return;
+      }
       onChanged?.();
       toast({
         id: WATER_TOAST_ID,
         title: "Water removed",
-        description: `−${Math.round(last.ml)} ml · ${Math.round(next)} ml today`,
+        description: `−${Math.round(removed)} ml · ${Math.round(next)} ml today`,
         variant: "info",
       });
     } catch {
       undoingRef.current = false;
-      displayRef.current += last.ml;
-      loggedRef.current += last.ml;
+      displayRef.current += removeMl;
+      loggedRef.current += removeMl;
       setDisplayMl(displayRef.current);
-      sipStack.current.push(last);
       toast({
         id: WATER_TOAST_ID,
         title: "Undo failed",
@@ -279,7 +344,7 @@ export function HydrationCard({
       <div className="mt-4 flex items-center gap-2">
         <button
           type="button"
-          aria-label="Undo last water"
+          aria-label="Remove 30 ml water"
           onClick={() => void undoSip()}
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-card-sm border border-line text-[18px] font-bold text-ink-2 hover:bg-app-bg"
         >
@@ -302,7 +367,7 @@ export function HydrationCard({
       </div>
 
       <p className="mt-2 text-center text-[11px] font-medium text-ink-3">
-        Hold to pour slowly · release anytime · − to undo
+        Hold to pour · − removes 30 ml
       </p>
     </Card>
   );

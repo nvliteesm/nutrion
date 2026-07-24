@@ -24,7 +24,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-app-bg text-navy">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-app-bg text-ink">
         <Logo />
         <span
           className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-teal border-t-transparent"

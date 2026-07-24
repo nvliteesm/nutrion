@@ -28,6 +28,10 @@
   --color-amber-d: var(--c-amber-d);
   --color-amber-t: var(--c-amber-t);
 
+  --color-orange: var(--c-orange);
+  --color-orange-d: var(--c-orange-d);
+  --color-orange-t: var(--c-orange-t);
+
   --color-red: var(--c-red);
   --color-red-d: var(--c-red-d);
   --color-red-t: var(--c-red-t);
@@ -67,6 +71,9 @@
   --c-amber: #efa02a;
   --c-amber-d: #b9760c;
   --c-amber-t: #fcf1de;
+  --c-orange: #e87a28;
+  --c-orange-d: #c45f14;
+  --c-orange-t: #fce9db;
   --c-red: #e4574c;
   --c-red-d: #c13b32;
   --c-red-t: #fbeae8;
@@ -94,6 +101,9 @@
   --c-amber: #f2ad45;
   --c-amber-d: #f4bd6b;
   --c-amber-t: rgba(239, 160, 42, 0.16);
+  --c-orange: #f07a2a;
+  --c-orange-d: #f59a5c;
+  --c-orange-t: rgba(240, 122, 42, 0.16);
   --c-red: #ef6459;
   --c-red-d: #f2857c;
   --c-red-t: rgba(228, 87, 76, 0.16);

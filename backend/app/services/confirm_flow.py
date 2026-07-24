@@ -38,7 +38,10 @@ def _drink_intake_source(drink: DrinkLabelData) -> str:
     return "drink_ai" if drink.analysis_mode == "photo" else "drink_ocr"
 
 
-# ---- Drinks (label OCR, then Kimi vision fallback) --------------------------
+# ---- Drinks -----------------------------------------------------------------
+# 1) Nutrition label present → OCR (Azure)
+# 2) No label → Kimi vision detector (estimate if drink)
+# 3) Not a drink (food / other) → reject
 
 async def analyze_drink(
     session: AsyncSession,
@@ -51,14 +54,14 @@ async def analyze_drink(
         raise ValueError("Drink scan requires an uploaded image file")
     path = _save_upload(file_bytes, filename)
 
-    # 1) Prefer nutrition-label OCR when present
+    # 1) Prefer nutrition-label OCR when a beverage label is present
     drink = await drink_label.analyze_drink_label(path)
     if drink is not None:
         drink.analysis_mode = "label"
-        message = "Normalized OCR result ready for review"
+        message = "Drink label OCR ready for review"
     else:
-        # 2) No label → Kimi classifies drink vs food and estimates
-        logger.info("No drink label found; falling back to Kimi vision")
+        # 2) No beverage label → Kimi classifies; rejects food/other
+        logger.info("No drink nutrition label found; falling back to Kimi vision")
         drink = await drink_detect.analyze_drink_photo(path)
         drink.analysis_mode = "photo"
         message = "No label found — drink photo estimate ready for review"
@@ -152,6 +155,7 @@ async def confirm_drink(
 
 
 # ---- Food -------------------------------------------------------------------
+# Kimi vision only — reject when no food is detected
 
 
 async def analyze_food(
@@ -310,6 +314,10 @@ async def confirm_medical(
     metrics: list[MedicalMetricData],
     *,
     user_id: str = "default",
+    age: float | None = None,
+    sex: str | None = None,
+    height_cm: float | None = None,
+    compute_sugar_barrier: bool = True,
 ) -> MedicalConfirmResponse:
     row = await analysis_store.get_analysis(session, analysis_id)
     if not row or row.kind != "medical":
@@ -334,9 +342,32 @@ async def confirm_medical(
         row,
         result={"metrics": [m.model_dump(mode="json") for m in metrics]},
     )
+
+    sugar_barrier = None
+    if compute_sugar_barrier:
+        from app.models.schemas import SugarBarrierResponse
+        from app.services.sugar_barrier import recommend_sugar_barrier
+
+        def _metric(*needles: str) -> float | None:
+            for m in metrics:
+                name = m.metric_name.lower()
+                if any(n in name for n in needles):
+                    return float(m.value)
+            return None
+
+        barrier = await recommend_sugar_barrier(
+            age=age,
+            sex=sex,
+            height_cm=height_cm,
+            hba1c=_metric("hba1c", "a1c"),
+            fasting_glucose=_metric("fasting", "glucose"),
+        )
+        sugar_barrier = SugarBarrierResponse.model_validate(barrier)
+
     return MedicalConfirmResponse(
         analysis_id=row.id,
         report_id=saved.id,
         metric_ids=[saved.id],
         metrics=metrics,
+        sugar_barrier=sugar_barrier,
     )

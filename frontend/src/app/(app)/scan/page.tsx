@@ -12,6 +12,7 @@ import {
   confirmMedical,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { applyIntakeTargets, getStoredProfile } from "@/lib/profile";
 import { SCAN_RESUME_KEY } from "@/components/scan/ScanCaptureSheet";
 import { CameraCapture } from "@/components/scan/CameraCapture";
 import { CameraIcon } from "@/components/icons";
@@ -224,6 +225,15 @@ export default function ScanPage() {
   }, [step, fromGallery, busy]);
 
   function resetAll() {
+    // Cancel/back leaves the scan picker — return to where the user came from.
+    if (mode === "medical") {
+      router.push("/medical");
+      return;
+    }
+    if (mode === "food" || mode === "drink") {
+      router.push("/today");
+      return;
+    }
     scanResumeCache = null;
     setStep("pick");
     setMode(null);
@@ -241,6 +251,38 @@ export default function ScanPage() {
     setMetrics([]);
     setAiSuggestion(null);
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  /** After save: medical → records; food/drink → Today. */
+  function exitAfterSave() {
+    if (mode === "medical") {
+      router.push("/medical");
+      return;
+    }
+    router.push("/today");
+  }
+
+  /** Clear result and log another of the same type (stay on upload). */
+  function logAnother() {
+    scanResumeCache = null;
+    setBusy(false);
+    setError(null);
+    setPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+    setAnalysisId(null);
+    setSavedId(null);
+    setDrink(null);
+    setFood(null);
+    setMetrics([]);
+    setAiSuggestion(null);
+    if (fileRef.current) fileRef.current.value = "";
+    if (mode) {
+      setStep("upload");
+    } else {
+      setStep("pick");
+    }
   }
 
   function pickMode(next: ScanMode) {
@@ -315,8 +357,29 @@ export default function ScanPage() {
             : `${ids.length} intakes (#${ids.join(", #")})`,
         );
       } else if (mode === "medical") {
-        const res = await confirmMedical(analysisId, metrics);
-        setSavedId(`report #${res.report_id ?? res.metric_ids[0]}`);
+        const profile = getStoredProfile();
+        const res = await confirmMedical(analysisId, metrics, "default", {
+          age: profile.personal.age,
+          sex: profile.personal.sex,
+          height_cm: profile.personal.height_cm,
+        });
+        if (res.sugar_barrier?.sugar_limit_g) {
+          applyIntakeTargets(
+            {
+              calories: res.sugar_barrier.calories,
+              sugar_g: res.sugar_barrier.sugar_limit_g,
+              water_cups: res.sugar_barrier.water_cups,
+            },
+            res.sugar_barrier.rationale,
+          );
+          const cal = res.sugar_barrier.calories;
+          const water = res.sugar_barrier.water_cups;
+          setSavedId(
+            `report #${res.report_id ?? res.metric_ids[0]} · ${cal ? `${cal} kcal · ` : ""}${res.sugar_barrier.sugar_limit_g} g sugar${water ? ` · ${water} cups water` : ""}/day`,
+          );
+        } else {
+          setSavedId(`report #${res.report_id ?? res.metric_ids[0]}`);
+        }
       }
       setStep("done");
       // Proactive AI: suggest a healthier alternative (non-blocking).
@@ -385,7 +448,7 @@ export default function ScanPage() {
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-ink-3">
           Log something
         </p>
-        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-navy">
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-ink">
           Scan & confirm
         </h1>
         <p className="mt-1.5 text-sm text-ink-2">
@@ -418,7 +481,7 @@ export default function ScanPage() {
                 m.accent,
               )}
             >
-              <div className="text-base font-extrabold text-navy">{m.title}</div>
+              <div className="text-base font-extrabold text-ink">{m.title}</div>
               <p className="mt-1 text-sm text-ink-2">{m.blurb}</p>
             </button>
           ))}
@@ -428,7 +491,7 @@ export default function ScanPage() {
       {step === "upload" && activeMode && (
         <Card className="space-y-4 p-5">
           <div>
-            <h2 className="text-lg font-extrabold text-navy">{activeMode.title}</h2>
+            <h2 className="text-lg font-extrabold text-ink">{activeMode.title}</h2>
             <p className="mt-1 text-sm text-ink-2">{activeMode.blurb}</p>
           </div>
           <input
@@ -507,7 +570,7 @@ export default function ScanPage() {
           {mode === "drink" && drink && (
             <Card className="space-y-4 p-5">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-extrabold text-navy">
+                <h2 className="text-lg font-extrabold text-ink">
                   {drink.analysis_mode === "photo"
                     ? "Drink photo estimate"
                     : "Drink label result"}
@@ -591,7 +654,7 @@ export default function ScanPage() {
             <div className="space-y-3">
               <Card className="flex items-center justify-between gap-3 p-5">
                 <div>
-                  <h2 className="text-lg font-extrabold text-navy">
+                  <h2 className="text-lg font-extrabold text-ink">
                     Food estimate
                   </h2>
                   <p className="mt-1 text-sm text-ink-2">
@@ -681,7 +744,7 @@ export default function ScanPage() {
           {mode === "medical" && (
             <div className="space-y-4">
               <Card className="p-5">
-                <h2 className="text-lg font-extrabold text-navy">
+                <h2 className="text-lg font-extrabold text-ink">
                   Extracted metrics
                 </h2>
                 <p className="mt-1 text-sm text-ink-2">
@@ -715,7 +778,7 @@ export default function ScanPage() {
                       className="space-y-3 p-5"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-base font-extrabold text-navy">
+                        <span className="text-base font-extrabold text-ink">
                           {m.metric_name}
                         </span>
                         <span
@@ -839,7 +902,7 @@ export default function ScanPage() {
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal">
             Saved
           </p>
-          <h2 className="text-xl font-extrabold text-navy">
+          <h2 className="text-xl font-extrabold text-ink">
             Entry confirmed
           </h2>
           <p className="text-sm text-ink-2">
@@ -864,11 +927,11 @@ export default function ScanPage() {
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button fullWidth onClick={() => router.push("/today")}>
-              Go to Today
+            <Button fullWidth onClick={exitAfterSave}>
+              {mode === "medical" ? "Go to Medical records" : "Go to Today"}
             </Button>
-            <Button variant="outline" fullWidth onClick={resetAll}>
-              Log another
+            <Button variant="outline" fullWidth onClick={logAnother}>
+              {mode === "medical" ? "Upload another" : "Log another"}
             </Button>
           </div>
         </Card>

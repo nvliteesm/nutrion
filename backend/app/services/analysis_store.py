@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from sqlalchemy import select
@@ -26,6 +26,11 @@ from app.models.schemas import (
 from app.services.medical_report import build_report_row, report_to_metric_records
 
 AnalysisKind = Literal["food", "drink", "medical"]
+
+
+def _utc_now() -> datetime:
+    """Timezone-aware UTC — required for DateTime(timezone=True) columns."""
+    return datetime.now(timezone.utc)
 
 
 def _new_id() -> str:
@@ -74,7 +79,7 @@ async def mark_confirmed(
     result: dict[str, Any] | None = None,
 ) -> Analysis:
     row.status = ConfirmationStatus.confirmed.value
-    row.confirmed_at = datetime.utcnow()
+    row.confirmed_at = _utc_now()
     if result is not None:
         row.result_json = json.dumps(result)
     await session.commit()
@@ -116,7 +121,8 @@ async def save_confirmed_intake(
         sugar_g=n.sugar_g,
         sodium_mg=n.sodium_mg,
         extras_json=json.dumps(merged_extras),
-        logged_at=datetime.utcnow(),
+        # Let Postgres timestamptz server_default (now()) set this — avoids
+        # naive/local mis-binding that shifted entries off the user's day.
     )
     session.add(row)
     await session.commit()
@@ -293,6 +299,76 @@ async def list_medical_reports(
         stmt = stmt.where(MedicalReport.user_id == user_id)
     result = await session.execute(stmt)
     return [medical_report_to_record(r) for r in result.scalars().all()]
+
+
+_METRIC_VALUE_STATUS: tuple[tuple[str, str, str], ...] = (
+    ("hba1c", "hba1c_status", "HbA1c"),
+    ("fasting_glucose", "fasting_glucose_status", "Fasting Blood Glucose"),
+    ("total_cholesterol", "total_cholesterol_status", "Total Cholesterol"),
+    ("ldl", "ldl_status", "LDL"),
+    ("hdl", "hdl_status", "HDL"),
+    ("triglycerides", "triglycerides_status", "Triglycerides"),
+)
+
+_UPDATABLE_REPORT_FIELDS = frozenset(
+    {
+        "test_date",
+        "notes",
+        *(col for pair in _METRIC_VALUE_STATUS for col in pair[:2]),
+    }
+)
+
+
+async def update_medical_report(
+    session: AsyncSession,
+    report_id: int,
+    updates: dict[str, object],
+) -> MedicalReportRecord | None:
+    """Partial update of a saved lab report. Only keys present in `updates` change."""
+    from app.services.medical_extract import DEFAULT_RANGES, _infer_status
+
+    row = await session.get(MedicalReport, report_id)
+    if not row:
+        return None
+
+    patch = {k: v for k, v in updates.items() if k in _UPDATABLE_REPORT_FIELDS}
+    if "test_date" in patch:
+        row.test_date = patch["test_date"]  # type: ignore[assignment]
+    if "notes" in patch:
+        row.notes = str(patch["notes"] or "")
+
+    for value_col, status_col, metric_name in _METRIC_VALUE_STATUS:
+        if value_col not in patch and status_col not in patch:
+            continue
+        if value_col in patch:
+            setattr(row, value_col, patch[value_col])
+        if status_col in patch:
+            setattr(row, status_col, patch[status_col])
+        elif value_col in patch:
+            value = patch[value_col]
+            if value is None:
+                setattr(row, status_col, None)
+            else:
+                ref_min, ref_max = DEFAULT_RANGES.get(metric_name, (None, None))
+                inferred = _infer_status(metric_name, float(value), ref_min, ref_max)
+                setattr(
+                    row,
+                    status_col,
+                    inferred.value if hasattr(inferred, "value") else str(inferred),
+                )
+
+    await session.commit()
+    await session.refresh(row)
+    return medical_report_to_record(row)
+
+
+async def delete_medical_report(session: AsyncSession, report_id: int) -> bool:
+    row = await session.get(MedicalReport, report_id)
+    if not row:
+        return False
+    await session.delete(row)
+    await session.commit()
+    return True
 
 
 def intake_to_record(row: Intake) -> IntakeRecord:

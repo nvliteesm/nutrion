@@ -25,6 +25,7 @@ export function groupByDate(entries: IntakeEntry[]): Map<string, IntakeEntry[]> 
 
 export type CalendarStatus =
   | "within"
+  | "elevated"
   | "moderate"
   | "significant"
   | "incomplete"
@@ -32,7 +33,8 @@ export type CalendarStatus =
 
 export const calendarColor: Record<CalendarStatus, string> = {
   within: "bg-teal",
-  moderate: "bg-amber",
+  elevated: "bg-amber",
+  moderate: "bg-orange",
   significant: "bg-red",
   incomplete: "bg-blue",
   none: "bg-line-2",
@@ -40,8 +42,9 @@ export const calendarColor: Record<CalendarStatus, string> = {
 
 export const calendarLabel: Record<CalendarStatus, string> = {
   within: "Within target",
-  moderate: "Moderately over",
-  significant: "Significantly over",
+  elevated: "Watch (25%+)",
+  moderate: "Elevated (50%+)",
+  significant: "High (75%+)",
   incomplete: "Incomplete",
   none: "No data",
 };
@@ -60,8 +63,9 @@ export function calendarStatus(
   // Very little logged for the day.
   if (totals.entryCount < 2 && worst < 0.4) return "incomplete";
 
-  if (worst > 1.25) return "significant";
-  if (worst > 1) return "moderate";
+  if (worst >= 0.75) return "significant";
+  if (worst >= 0.5) return "moderate";
+  if (worst >= 0.25) return "elevated";
   return "within";
 }
 

@@ -33,7 +33,7 @@ class AzureOpenAIClient:
         system: str,
         user: str,
         *,
-        temperature: float | None = 0.1,
+        temperature: float | None = None,
     ) -> dict[str, Any] | None:
         if not self.enabled:
             return None
@@ -45,7 +45,7 @@ class AzureOpenAIClient:
                 {"role": "user", "content": user},
             ],
         }
-        # Some Azure deployments (e.g. gpt-5-mini) only allow default temperature.
+        # gpt-5-mini and similar deployments only allow the default temperature.
         if temperature is not None:
             payload["temperature"] = temperature
         try:
@@ -103,9 +103,8 @@ class AzureOpenAIClient:
     async def vision_ocr(self, image_b64: str, mime: str = "image/jpeg") -> str | None:
         if not self.enabled:
             return None
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.chat_model,
-            "temperature": 0,
             "messages": [
                 {
                     "role": "system",
@@ -152,13 +151,12 @@ class AzureOpenAIClient:
         user_text: str,
         image_b64: str,
         mime: str = "image/jpeg",
-        temperature: float = 0.1,
+        temperature: float | None = None,
     ) -> dict[str, Any] | None:
         if not self.enabled:
             return None
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.chat_model,
-            "temperature": temperature,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system},
@@ -174,6 +172,9 @@ class AzureOpenAIClient:
                 },
             ],
         }
+        # gpt-5-mini and similar deployments only allow the default temperature.
+        if temperature is not None:
+            payload["temperature"] = temperature
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
                 resp = await client.post(
@@ -181,6 +182,17 @@ class AzureOpenAIClient:
                     headers=self._headers(),
                     json=payload,
                 )
+                if (
+                    resp.status_code >= 400
+                    and "temperature" in (resp.text or "").lower()
+                    and "temperature" in payload
+                ):
+                    payload.pop("temperature", None)
+                    resp = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=self._headers(),
+                        json=payload,
+                    )
                 if resp.status_code >= 400:
                     logger.error(
                         "Azure vision_json %s: %s",

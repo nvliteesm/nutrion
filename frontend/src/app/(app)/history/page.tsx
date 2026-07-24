@@ -4,7 +4,7 @@ import { ChatWindow } from "@/components/assistant/ChatWindow";
 
 /**
  * Primary AI chat route (nav label: AI Chat).
- * Full-bleed wide chat — calendar lives on Today.
+ * Full-bleed wide chat — calendar lives on Today; medical labs on /medical.
  */
 export default function AiChatPage() {
   return (

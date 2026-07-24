@@ -381,16 +381,79 @@ def stub_extract_medical(raw_text: str) -> list[MedicalMetricData]:
     return _dedupe_and_order(metrics)
 
 
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
+
+
+def _mime_for(path) -> str:
+    from pathlib import Path
+
+    ext = Path(path).suffix.lower()
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".gif": "image/gif",
+    }.get(ext, "image/jpeg")
+
+
 async def _read_report_text(path) -> str:
     from pathlib import Path
 
     path = Path(path)
-    ext = path.suffix.lower()
-    image_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
-    if ext in image_exts:
+    if path.suffix.lower() in _IMAGE_EXTS:
         # Never invent stub lab text for random photos.
         return await ocr.extract_text_from_image(path, allow_stub=False)
     return await document_parser.parse_document(path)
+
+
+def _metrics_from_llm_payload(
+    data: dict[str, Any] | None,
+) -> tuple[list[MedicalMetricData], bool | None]:
+    """Parse Azure JSON extract payload into metrics + optional is_medical flag."""
+    if not data or not isinstance(data.get("metrics"), list):
+        return [], None
+    is_medical: bool | None = None
+    flag = data.get("is_medical_report")
+    if isinstance(flag, str):
+        is_medical = flag.strip().lower() in {"true", "1", "yes"}
+    elif isinstance(flag, bool):
+        is_medical = flag
+    metrics: list[MedicalMetricData] = []
+    for item in data["metrics"]:
+        if isinstance(item, dict):
+            parsed = _metric_from_dict(item)
+            if parsed:
+                metrics.append(parsed)
+    return metrics, is_medical
+
+
+async def _extract_from_image_vision(path) -> tuple[list[MedicalMetricData], str, bool | None]:
+    """Fallback: read lab metrics directly from the report image via vision."""
+    import base64
+    from pathlib import Path
+
+    path = Path(path)
+    if not azure_client.enabled:
+        return [], "", None
+    b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    data = await azure_client.vision_json(
+        system=MEDICAL_EXTRACT_SYSTEM,
+        user_text=(
+            "Extract blood sugar and lipid profile metrics from this lab report image. "
+            "If it is not a medical/lab report, set is_medical_report=false and metrics=[]."
+        ),
+        image_b64=b64,
+        mime=_mime_for(path),
+    )
+    metrics, is_medical = _metrics_from_llm_payload(data)
+    raw = ""
+    if metrics:
+        raw = "Vision extract:\n" + "\n".join(
+            f"{m.metric_name}: {m.value} {m.unit}" for m in metrics
+        )
+    return metrics, raw, is_medical
 
 
 def _merge_metrics(
@@ -407,29 +470,32 @@ def _merge_metrics(
 
 async def extract_medical_metrics(path) -> tuple[list[MedicalMetricData], str]:
     """OCR/parse → classify into blood_sugar/lipid fields only; omit missing."""
+    from pathlib import Path
+
+    path = Path(path)
     raw_text = await _read_report_text(path)
-    if not (raw_text or "").strip():
-        raise ValueError(UNREADABLE)
 
-    deterministic = stub_extract_medical(raw_text)
-
+    deterministic: list[MedicalMetricData] = []
     llm_metrics: list[MedicalMetricData] = []
     is_medical: bool | None = None
-    if azure_client.enabled and raw_text.strip():
-        data = await azure_client.chat_json(MEDICAL_EXTRACT_SYSTEM, raw_text[:12000])
-        if data and isinstance(data.get("metrics"), list):
-            flag = data.get("is_medical_report")
-            if isinstance(flag, str):
-                is_medical = flag.strip().lower() in {"true", "1", "yes"}
-            elif isinstance(flag, bool):
-                is_medical = flag
-            for item in data["metrics"]:
-                if isinstance(item, dict):
-                    parsed = _metric_from_dict(item)
-                    if parsed:
-                        llm_metrics.append(parsed)
-        else:
-            logger.warning("Azure medical extract empty/failed; using deterministic parser")
+
+    if (raw_text or "").strip():
+        deterministic = stub_extract_medical(raw_text)
+        if azure_client.enabled:
+            data = await azure_client.chat_json(MEDICAL_EXTRACT_SYSTEM, raw_text[:12000])
+            llm_metrics, is_medical = _metrics_from_llm_payload(data)
+            if not llm_metrics and data is None:
+                logger.warning("Azure medical extract empty/failed; using deterministic parser")
+    elif path.suffix.lower() in _IMAGE_EXTS:
+        # OCR empty (common when vision chat rejects temperature / CU blank) —
+        # fall back to reading metrics straight from the image.
+        logger.info("Medical OCR empty; trying vision extract on %s", path.name)
+        llm_metrics, raw_text, is_medical = await _extract_from_image_vision(path)
+    else:
+        raise ValueError(UNREADABLE)
+
+    if not (raw_text or "").strip() and not llm_metrics and not deterministic:
+        raise ValueError(UNREADABLE)
 
     if is_medical is False and not llm_metrics and not deterministic:
         raise ValueError(MEDICAL_REJECT)

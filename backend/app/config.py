@@ -71,7 +71,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Nutrion API"
     debug: bool = True
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Prefer DATABASE_URL. Supabase: Project Settings → Database → URI
     database_url: str = DEFAULT_SQLITE_URL

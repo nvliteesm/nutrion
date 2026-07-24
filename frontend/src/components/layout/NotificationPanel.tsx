@@ -21,7 +21,7 @@ const kindTone: Record<NotifKind, string> = {
   drink_reminder: "bg-blue-t text-blue-d",
   hydration: "bg-blue-t text-blue-d",
   sugar_warning: "bg-amber-t text-amber-d",
-  daily_summary: "bg-navy/[0.06] text-navy",
+  daily_summary: "bg-navy/[0.06] text-ink",
   welcome: "bg-teal-t text-teal-d",
 };
 

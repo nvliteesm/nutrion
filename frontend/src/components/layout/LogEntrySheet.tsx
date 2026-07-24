@@ -81,25 +81,32 @@ export function LogEntrySheet({
     }
   }, [open]);
 
-  function handleClose() {
+  function resetLocal() {
     setExpanded(null);
     setCameraFor(null);
     setGalleryFor(null);
     setError(null);
+  }
+
+  function handleClose() {
+    if (busy) return;
+    resetLocal();
     onClose();
   }
 
   async function runAnalyze(kind: Kind, file: File) {
     setBusy(true);
+    setExpanded(null);
     setError(null);
     try {
       await analyzeAndResume(kind, file);
-      handleClose();
+      resetLocal();
+      setBusy(false);
+      onClose();
       router.push(`/scan?mode=${kind}&resume=1`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Analyze failed";
       setError(msg);
-    } finally {
       setBusy(false);
       setCameraFor(null);
       setGalleryFor(null);
@@ -108,6 +115,7 @@ export function LogEntrySheet({
   }
 
   function onSubAction(kind: Kind, action: SubAction["id"]) {
+    if (busy) return;
     setError(null);
     if (action === "manual") {
       handleClose();
@@ -124,6 +132,7 @@ export function LogEntrySheet({
   }
 
   function onMedical() {
+    if (busy) return;
     setError(null);
     setGalleryFor("medical");
     requestAnimationFrame(() => fileRef.current?.click());
@@ -146,30 +155,47 @@ export function LogEntrySheet({
             Log an entry
           </h2>
           <p className="mt-1 text-[13px] font-medium text-ink-3">
-            Choose drink, food, or a medical report
+            {busy
+              ? "Hang tight — NutriON is analyzing your upload"
+              : "Choose drink, food, or a medical report"}
           </p>
         </div>
 
-        <div className="flex flex-col gap-2.5 overflow-y-auto px-4 pb-6 pt-2">
+        <div
+          className={cn(
+            "flex flex-col gap-2.5 overflow-y-auto px-4 pb-6 pt-2",
+            busy && "pointer-events-none select-none",
+          )}
+          aria-busy={busy}
+        >
           {PRIMARY.map((opt) => {
             const Icon = opt.icon;
-            const isOpen = expanded === opt.kind;
+            const isOpen = !busy && expanded === opt.kind;
 
             return (
               <div
                 key={opt.kind}
-                className="rounded-[16px] border border-line bg-card transition-colors hover:border-line-2 hover:bg-app-bg/50"
+                className={cn(
+                  "rounded-[16px] border border-line bg-card transition-colors",
+                  busy
+                    ? "opacity-55"
+                    : "hover:border-line-2 hover:bg-app-bg/50",
+                )}
                 onMouseEnter={() => {
-                  if (opt.hasSubs) setExpanded(opt.kind);
+                  if (!busy && opt.hasSubs) setExpanded(opt.kind);
                 }}
                 onMouseLeave={() => {
-                  if (opt.hasSubs && expanded === opt.kind) setExpanded(null);
+                  if (!busy && opt.hasSubs && expanded === opt.kind) {
+                    setExpanded(null);
+                  }
                 }}
               >
                 <button
                   type="button"
                   disabled={busy}
+                  tabIndex={busy ? -1 : undefined}
                   onClick={() => {
+                    if (busy) return;
                     if (!opt.hasSubs) {
                       onMedical();
                       return;
@@ -214,11 +240,12 @@ export function LogEntrySheet({
                               key={sub.id}
                               type="button"
                               disabled={busy}
+                              tabIndex={busy ? -1 : undefined}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onSubAction(opt.kind, sub.id);
                               }}
-                              className="flex flex-1 flex-col items-center gap-1.5 rounded-[12px] border border-transparent bg-app-bg/80 px-2 py-2.5 text-ink-2 transition-colors hover:border-line hover:bg-app-bg hover:text-ink"
+                              className="flex flex-1 flex-col items-center gap-1.5 rounded-[12px] border border-transparent bg-app-bg/80 px-2 py-2.5 text-ink-2 transition-colors hover:border-line hover:bg-app-bg hover:text-ink disabled:hover:border-transparent disabled:hover:bg-app-bg/80 disabled:hover:text-ink-2"
                             >
                               <SubIcon size={18} />
                               <span className="text-[11px] font-semibold">
@@ -236,12 +263,16 @@ export function LogEntrySheet({
           })}
 
           {error && (
-            <p className="rounded-[12px] bg-red-t px-3 py-2 text-[12px] font-medium text-red-d">
+            <p className="pointer-events-auto rounded-[12px] bg-red-t px-3 py-2 text-[12px] font-medium text-red-d">
               {error}
             </p>
           )}
           {busy && (
-            <p className="text-center text-[12px] font-medium text-ink-3">
+            <p className="flex items-center justify-center gap-2 text-center text-[12px] font-medium text-ink-3">
+              <span
+                className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-teal border-t-transparent"
+                aria-hidden
+              />
               Analyzing with NutriON…
             </p>
           )}

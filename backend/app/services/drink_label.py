@@ -22,10 +22,15 @@ logger = logging.getLogger(__name__)
 
 DRINK_EXTRACT_SYSTEM = """You extract structured drink nutrition-label data from OCR text.
 
-First decide whether the text is from a beverage Nutrition Facts / drink label.
-If it is NOT a drink nutrition label (random photo OCR, food menu, medical report,
-packaging without nutrient facts, empty/gibberish), set is_nutrition_label=false
-and leave nutrients at 0.
+First decide whether the text is from a *beverage* Nutrition Facts / drink label
+(soda, juice, milk, coffee, tea, energy drink, sports drink, water, bubble tea, etc.).
+
+Set is_nutrition_label=false when:
+- It is NOT a nutrition label at all (menu, medical report, random OCR, gibberish)
+- It is a FOOD product label (cereal, snacks, chips, packaged meal, sauce — not a drink)
+- Nutrients cannot be read
+
+Only set is_nutrition_label=true for beverage / drink labels with nutrient facts.
 
 Return JSON with keys:
 is_nutrition_label (boolean),
@@ -42,6 +47,21 @@ caffeine_mg (number or null),
 confidence (0-1).
 Use 0 when a nutrient is unknown. Prefer values explicitly on the label.
 Never invent a product just to fill the schema when is_nutrition_label is false."""
+
+
+_BEVERAGE_HINTS = re.compile(
+    r"\b(?:beverage|drink|juice|soda|cola|milk|latte|coffee|tea|energy\s*drink|"
+    r"sports\s*drink|water|sparkling|smoothie|shake|kombucha|beer|wine|"
+    r"bubble\s*tea|boba|fl\.?\s*oz|fluid\s*ounce|\bml\b|milliliters?)\b",
+    re.IGNORECASE,
+)
+
+_FOOD_PACKAGING_HINTS = re.compile(
+    r"\b(?:cereal|chips?|cracker|cookie|biscuit|snack|bar\b|noodles?|"
+    r"instant\s*ramen|sauce|dressing|yogurt\s*cup|ice\s*cream|"
+    r"serving\s+size\s*[:=]?\s*\d+\s*g\b)\b",
+    re.IGNORECASE,
+)
 
 
 def _num(pattern: str, text: str) -> float | None:
@@ -148,9 +168,16 @@ def _drink_from_dict(data: dict[str, Any], raw_text: str) -> DrinkLabelData:
 
 
 def _accept_label_result(drink: DrinkLabelData, *, is_label: bool | None) -> DrinkLabelData | None:
-    """Return drink when OCR/LLM found a real nutrition label; else None."""
+    """Return drink when OCR/LLM found a real *beverage* nutrition label; else None."""
     if is_label is False:
         return None
+
+    text = drink.raw_text or ""
+    # Food packaging nutrition facts must not be accepted as a drink label.
+    if _FOOD_PACKAGING_HINTS.search(text) and not _BEVERAGE_HINTS.search(text):
+        logger.info("OCR looks like food packaging, not a drink label")
+        return None
+
     has_nutrients = drink_has_usable_nutrients(
         calories=drink.calories,
         carbohydrates_g=drink.carbohydrates_g,
@@ -160,12 +187,14 @@ def _accept_label_result(drink: DrinkLabelData, *, is_label: bool | None) -> Dri
         drink_volume_ml=drink.drink_volume_ml,
         confidence=drink.confidence,
     )
-    has_hints = looks_like_nutrition_label(drink.raw_text)
-    if has_nutrients:
+    has_hints = looks_like_nutrition_label(text)
+    beverageish = bool(_BEVERAGE_HINTS.search(text)) or bool(drink.drink_volume_ml)
+
+    if has_nutrients and (beverageish or is_label is True):
         return drink
-    if is_label is True and has_hints:
+    if is_label is True and has_hints and beverageish:
         return drink
-    if has_hints and drink.confidence >= 0.55:
+    if has_hints and beverageish and drink.confidence >= 0.55:
         return drink
     return None
 
