@@ -1,83 +1,135 @@
+"""Chroma vector store for semantic meal memory."""
+
 from __future__ import annotations
 
-import json
-import logging
-import math
-import hashlib
-from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+
+import chromadb
+from chromadb.api.models.Collection import Collection
+from chromadb.errors import InvalidDimensionException
 
 from app.config import settings
 from app.models.schemas import ExtractedMeal
-from app.services.azure_client import azure_client
+from app.services.foundry import foundry
 
-logger = logging.getLogger(__name__)
-
-EMBED_DIM = 384
-_STORE_PATH = Path(settings.chroma_path) / "memory.jsonl"
+COLLECTION_NAME = "meal_memory"
 
 
-def _hash_embed(text: str, dim: int = EMBED_DIM) -> list[float]:
-    vec = [0.0] * dim
-    tokens = text.lower().split() or ["empty"]
-    for tok in tokens:
-        digest = hashlib.sha256(tok.encode("utf-8")).digest()
-        for i in range(0, min(len(digest), 32), 4):
-            idx = int.from_bytes(digest[i : i + 2], "little") % dim
-            sign = 1.0 if digest[i + 2] % 2 == 0 else -1.0
-            vec[idx] += sign
-    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-    return [v / norm for v in vec]
+class VectorStore:
+    def __init__(self) -> None:
+        self._client = chromadb.PersistentClient(path=settings.chroma_path)
+        self._collection: Collection = self._client.get_or_create_collection(
+            name=COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
+        )
 
+    @property
+    def collection(self) -> Collection:
+        return self._collection
 
-def _cosine(a: list[float], b: list[float]) -> float:
-    n = min(len(a), len(b))
-    if n == 0:
-        return 0.0
-    dot = sum(a[i] * b[i] for i in range(n))
-    na = math.sqrt(sum(a[i] * a[i] for i in range(n))) or 1.0
-    nb = math.sqrt(sum(b[i] * b[i] for i in range(n))) or 1.0
-    return dot / (na * nb)
-
-
-def _ensure_store() -> None:
-    _STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not _STORE_PATH.exists():
-        _STORE_PATH.write_text("", encoding="utf-8")
-
-
-def _load_rows() -> list[dict[str, Any]]:
-    _ensure_store()
-    rows: list[dict[str, Any]] = []
-    for line in _STORE_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    def reset_collection(self) -> None:
+        """Drop and recreate collection (needed when embedding dims change)."""
         try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return rows
+            self._client.delete_collection(COLLECTION_NAME)
+        except Exception:  # noqa: BLE001 — collection may not exist
+            pass
+        self._collection = self._client.get_or_create_collection(
+            name=COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
+        )
+
+    def _ensure_dims(self, embedding: list[float]) -> None:
+        """If collection has conflicting dimensionality, recreate it empty."""
+        if self._collection.count() == 0:
+            return
+        try:
+            peek = self._collection.peek(limit=1)
+            stored = (peek.get("embeddings") or [None])[0]
+            if stored is not None and len(stored) != len(embedding):
+                self.reset_collection()
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def upsert_meal(
+        self,
+        *,
+        intake_id: int,
+        user_id: str,
+        document: str,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> str:
+        doc_id = f"intake-{intake_id}"
+        embedding = (await foundry.embed([document]))[0]
+        self._ensure_dims(embedding)
+        meta = {"user_id": user_id, "intake_id": intake_id, **(metadata or {})}
+        # Chroma metadata values must be str|int|float|bool
+        clean_meta = {k: v for k, v in meta.items() if isinstance(v, (str, int, float, bool))}
+        try:
+            self._collection.upsert(
+                ids=[doc_id],
+                documents=[document],
+                embeddings=[embedding],
+                metadatas=[clean_meta],
+            )
+        except InvalidDimensionException:
+            self.reset_collection()
+            self._collection.upsert(
+                ids=[doc_id],
+                documents=[document],
+                embeddings=[embedding],
+                metadatas=[clean_meta],
+            )
+        return doc_id
+
+    async def search(
+        self,
+        *,
+        query: str,
+        user_id: str,
+        top_k: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        k = top_k or settings.rag_top_k
+        embedding = (await foundry.embed([query]))[0]
+        self._ensure_dims(embedding)
+        try:
+            result = self._collection.query(
+                query_embeddings=[embedding],
+                n_results=max(k, 1),
+                where={"user_id": user_id},
+                include=["documents", "metadatas", "distances"],
+            )
+        except InvalidDimensionException:
+            # Dims changed (e.g. stub -> Foundry). Clear incompatible vectors.
+            self.reset_collection()
+            return []
+
+        docs = (result.get("documents") or [[]])[0]
+        metas = (result.get("metadatas") or [[]])[0]
+        distances = (result.get("distances") or [[]])[0]
+        ids = (result.get("ids") or [[]])[0]
+
+        hits: list[dict[str, Any]] = []
+        for i, doc in enumerate(docs):
+            hits.append(
+                {
+                    "id": ids[i] if i < len(ids) else None,
+                    "document": doc,
+                    "metadata": metas[i] if i < len(metas) else {},
+                    "distance": distances[i] if i < len(distances) else None,
+                }
+            )
+        return hits
+
+    def count(self) -> int:
+        return self._collection.count()
 
 
-def _rewrite(rows: list[dict[str, Any]]) -> None:
-    _ensure_store()
-    with _STORE_PATH.open("w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-
-async def _embed_texts(texts: list[str]) -> list[list[float]]:
-    live = await azure_client.embed(texts)
-    if live and len(live) == len(texts):
-        return live
-    return [_hash_embed(t) for t in texts]
+vector_store = VectorStore()
 
 
 def get_collection() -> dict[str, Any]:
     """Compatibility shim for app startup."""
-    _ensure_store()
-    return {"path": str(_STORE_PATH), "count": len(_load_rows())}
+    return {"path": settings.chroma_path, "count": vector_store.count()}
 
 
 async def upsert_meal(
@@ -120,35 +172,16 @@ async def search(
     user_id: str | None = None,
     limit: int = 5,
 ) -> list[dict[str, Any]]:
-    rows = _load_rows()
-    if user_id:
-        rows = [r for r in rows if (r.get("metadata") or {}).get("user_id") == user_id]
-    if not rows:
-        return []
-
-    query_vec = (await _embed_texts([query]))[0]
-    scored: list[tuple[float, dict[str, Any]]] = []
-    for row in rows:
-        emb = row.get("embedding") or []
-        score = _cosine(query_vec, emb)
-        scored.append((score, row))
-    scored.sort(key=lambda x: x[0], reverse=True)
-
-    out: list[dict[str, Any]] = []
-    for score, row in scored[:limit]:
-        out.append(
-            {
-                "document": row.get("document"),
-                "metadata": row.get("metadata") or {},
-                "distance": 1.0 - score,
-            }
-        )
-    return out
+    """Module-level API used by vector search routes."""
+    return await vector_store.search(
+        query=query,
+        user_id=user_id or "default",
+        top_k=limit,
+    )
 
 
 def health() -> dict[str, Any]:
     try:
-        rows = _load_rows()
-        return {"ok": True, "count": len(rows), "path": str(_STORE_PATH)}
-    except Exception as exc:
+        return {"ok": True, "count": vector_store.count(), "path": settings.chroma_path}
+    except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}

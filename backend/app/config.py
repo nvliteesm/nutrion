@@ -1,10 +1,33 @@
 from pathlib import Path
 
+from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
+
+
+def _normalize_openai_v1_base(endpoint: str) -> str:
+    """Strip Responses/Chat paths so we can call /chat/completions and /embeddings."""
+    base = endpoint.strip().rstrip("/")
+    for suffix in (
+        "/openai/v1/responses",
+        "/openai/v1/chat/completions",
+        "/openai/v1/embeddings",
+        "/responses",
+        "/chat/completions",
+        "/embeddings",
+    ):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+            break
+    base = base.rstrip("/")
+    if base.endswith("/openai/v1"):
+        return base
+    if "/openai/v1" in base:
+        return base.split("/openai/v1")[0].rstrip("/") + "/openai/v1"
+    return f"{base}/openai/v1"
 
 
 class Settings(BaseSettings):
@@ -20,20 +43,18 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
 
     database_url: str = f"sqlite+aiosqlite:///{(DATA_DIR / 'nutrion.db').as_posix()}"
-    chroma_path: str = str(DATA_DIR / "vector")
+    chroma_path: str = str(DATA_DIR / "chroma")
     upload_dir: str = str(DATA_DIR / "uploads")
 
     # Account B — Azure OpenAI / Foundry model deployment
     azure_openai_api_key: str = ""
-    azure_openai_endpoint: str = "https://nutrion-resource.services.ai.azure.com/openai/v1"
-    azure_ai_project_endpoint: str = (
-        "https://nutrion-resource.services.ai.azure.com/api/projects/nutrion"
-    )
-    azure_openai_chat_deployment: str = "gpt-4o-mini"
+    azure_openai_endpoint: str = ""
+    azure_ai_project_endpoint: str = ""
+    azure_openai_chat_deployment: str = "gpt-5-mini"
     azure_openai_embedding_deployment: str = "text-embedding-3-small"
 
     # Account A — Content Understanding (OCR / docs)
-    azure_content_endpoint: str = "https://nutri-on-resource.services.ai.azure.com"
+    azure_content_endpoint: str = ""
     azure_content_api_key: str = ""
     azure_content_analyzer: str = "prebuilt-layout"
     azure_content_api_version: str = "2025-11-01"
@@ -44,7 +65,10 @@ class Settings(BaseSettings):
     kimi_vision_model: str = "kimi-k3"
 
     use_live_ai: bool = True
+    allow_stub_embeddings: bool = True
+    rag_top_k: int = 5
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -79,11 +103,7 @@ class Settings(BaseSettings):
 
     @property
     def openai_base_url(self) -> str:
-        url = self.azure_openai_endpoint.rstrip("/")
-        for suffix in ("/responses", "/chat/completions", "/embeddings"):
-            if url.endswith(suffix):
-                url = url[: -len(suffix)]
-        return url.rstrip("/")
+        return self.foundry_openai_base
 
     @property
     def chat_model(self) -> str:
@@ -96,6 +116,33 @@ class Settings(BaseSettings):
     @property
     def content_base_url(self) -> str:
         return self.azure_content_endpoint.rstrip("/")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def foundry_api_key(self) -> str:
+        return self.azure_openai_api_key
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def foundry_openai_base(self) -> str:
+        raw = self.azure_openai_endpoint
+        if not raw:
+            return ""
+        return _normalize_openai_v1_base(raw)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def chat_deployment(self) -> str:
+        return self.azure_openai_chat_deployment or "gpt-5-mini"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def embedding_deployment(self) -> str:
+        return self.azure_openai_embedding_deployment or "text-embedding-3-small"
+
+    @property
+    def foundry_configured(self) -> bool:
+        return bool(self.foundry_api_key and self.foundry_openai_base)
 
 
 settings = Settings()

@@ -1,18 +1,29 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import api, router
+from app.api.routes_ai import router as ai_router
+from app.api.routes_analytics import router as analytics_router
+from app.api.routes_memory_chat import router as memory_chat_router
 from app.config import settings
 from app.db import init_db
-from app.services import vector_store
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_app: FastAPI):
     await init_db()
-    vector_store.get_collection()
+    try:
+        from app.services.knowledge_store import knowledge_store
+
+        count = await knowledge_store.ensure_indexed()
+        logger.info("Approved health knowledge indexed: %s chunks", count)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to index approved health knowledge")
     yield
 
 
@@ -26,13 +37,16 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.origins or ["*"],
+    allow_origins=settings.origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(router)
 app.include_router(api)
+app.include_router(memory_chat_router)
+app.include_router(analytics_router)
+app.include_router(ai_router)
 
 
 @app.get("/")

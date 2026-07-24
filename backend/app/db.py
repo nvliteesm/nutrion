@@ -36,6 +36,10 @@ async def _sqlite_add_missing_columns(conn) -> None:
         alters.append("ALTER TABLE intakes ADD COLUMN confirmed BOOLEAN DEFAULT 0")
     if "analysis_id" not in existing:
         alters.append("ALTER TABLE intakes ADD COLUMN analysis_id VARCHAR(64) DEFAULT ''")
+    if "is_estimated" not in existing:
+        alters.append("ALTER TABLE intakes ADD COLUMN is_estimated BOOLEAN DEFAULT 0")
+    if "input_type" not in existing:
+        alters.append("ALTER TABLE intakes ADD COLUMN input_type VARCHAR(32) DEFAULT 'food'")
     for stmt in alters:
         await conn.execute(text(stmt))
 

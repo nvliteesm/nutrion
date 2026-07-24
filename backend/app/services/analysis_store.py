@@ -283,6 +283,10 @@ def intake_to_record(row: Intake) -> IntakeRecord:
         source=row.source,
         confidence=row.confidence,
         confirmed=bool(getattr(row, "confirmed", False)),
+        is_estimated=bool(getattr(row, "is_estimated", False)),
+        input_type=getattr(row, "input_type", None)
+        or getattr(row, "kind", None)
+        or "food",
         raw_text=row.raw_text,
         file_path=getattr(row, "file_path", "") or "",
         analysis_id=getattr(row, "analysis_id", "") or "",

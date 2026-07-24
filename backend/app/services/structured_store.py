@@ -27,7 +27,7 @@ async def save_intake(
         kind=kind,
         name=meal.name,
         serving=meal.serving,
-        source=source or meal.source,
+        source=resolved_source,
         file_path=file_path,
         raw_text=meal.raw_text,
         confidence=meal.confidence,

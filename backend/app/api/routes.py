@@ -61,10 +61,20 @@ async def _read_upload(file: Optional[UploadFile]) -> tuple[bytes | None, str | 
 
 @router.get("/health", response_model=HealthResponse)
 async def health(session: AsyncSession = Depends(get_session)) -> HealthResponse:
+    from app.services.foundry import foundry
+    from app.services.knowledge_store import knowledge_store
+
     chroma = vector_store.health()
     structured = await structured_store.storage_stats(session)
+    knowledge = knowledge_store.health()
+    foundry_status = await foundry.ping()
+    overall = (
+        "ok"
+        if chroma.get("ok") and knowledge.get("ok") and foundry_status.get("ok")
+        else "degraded"
+    )
     return HealthResponse(
-        status="ok" if chroma.get("ok") else "degraded",
+        status=overall,
         services={
             "pipeline": {
                 "analyze_confirm": ["foods", "drinks", "medical"],
@@ -74,6 +84,8 @@ async def health(session: AsyncSession = Depends(get_session)) -> HealthResponse
             },
             "structured_db": {"ok": True, "url": settings.database_url, **structured},
             "vector_db": chroma,
+            "knowledge_base": knowledge,
+            "foundry": foundry_status,
             "azure_models": {
                 "live_ai": settings.live_ai_enabled,
                 "endpoint": settings.openai_base_url,
