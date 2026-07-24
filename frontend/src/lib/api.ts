@@ -62,7 +62,8 @@ function mapConfidence(score: number): Confidence {
 
 function adaptBackendIntake(r: BackendIntake): IntakeEntry {
   const extras = r.nutrients.extras ?? {};
-  const type: EntryType = r.kind === "drink" ? "drink" : "food";
+  const type: EntryType =
+    r.kind === "drink" ? "drink" : r.kind === "water" ? "water" : "food";
   const source = mapSource(r.source);
   const nutrients: Nutrients = {
     calories: r.nutrients.calories,
@@ -215,4 +216,21 @@ export async function confirmMedical(analysisId: string, metrics: unknown[], use
   });
   if (!res.ok) await apiError(res);
   return res.json();
+}
+
+/** One water sip (~30 ml). Hold-to-fill fires this once per second. */
+export async function logWaterSip(ml = 30, userId = "default"): Promise<{ intake_id: number; ml: number }> {
+  const res = await fetch("/api/water/sip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, ml }),
+  });
+  if (!res.ok) await apiError(res);
+  return res.json();
+}
+
+export async function deleteIntake(intakeId: number | string): Promise<void> {
+  const id = String(intakeId).replace(/^be_/, "");
+  const res = await fetch(`/intakes/${id}`, { method: "DELETE" });
+  if (!res.ok) await apiError(res);
 }

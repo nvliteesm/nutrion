@@ -1,115 +1,70 @@
 "use client";
 
 import Link from "next/link";
-import { Card, useToast } from "@/components/ui";
-import {
-  CupIcon,
-  DropletIcon,
-  PlusIcon,
-  UtensilsIcon,
-} from "@/components/icons";
+import { Card } from "@/components/ui";
+import { CupIcon, PlusIcon, UtensilsIcon } from "@/components/icons";
+import { cn } from "@/lib/cn";
 
-interface LinkAction {
-  label: string;
-  href: string;
-  icon: typeof CupIcon;
-  iconBg: string;
-  iconColor: string;
-  tap?: false;
-}
-
-const linkActions: LinkAction[] = [
+const actions = [
   {
-    label: "Scan food",
-    href: "/scan?mode=food",
-    icon: UtensilsIcon,
-    iconBg: "bg-teal-t",
-    iconColor: "text-teal-d",
-  },
-  {
-    label: "Scan drink",
     href: "/scan?mode=drink",
+    title: "Drink",
+    blurb: "Scan a label or estimate it",
     icon: CupIcon,
-    iconBg: "bg-blue-t",
-    iconColor: "text-blue-d",
+    accent: "border-blue/25 bg-blue-t text-blue-d",
+    iconWrap: "bg-blue text-white",
   },
   {
-    label: "Add manually",
-    href: "/scan/manual",
-    icon: PlusIcon,
-    iconBg: "bg-navy/[0.06]",
-    iconColor: "text-navy",
+    href: "/scan?mode=food",
+    title: "Food",
+    blurb: "Snap a meal to estimate it",
+    icon: UtensilsIcon,
+    accent: "border-line bg-card text-ink-2",
+    iconWrap: "bg-app-bg text-ink",
   },
-];
+  {
+    href: "/scan/manual",
+    title: "Add manually",
+    blurb: "Type in a meal or drink",
+    icon: PlusIcon,
+    accent: "border-line bg-card text-ink-2",
+    iconWrap: "bg-app-bg text-ink",
+  },
+] as const;
 
 export function QuickActions() {
-  const { toast } = useToast();
-
-  async function addWater() {
-    try {
-      const res = await fetch("/memory/intakes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: "default",
-          meal: {
-            name: "Water",
-            serving: "1 cup (250 ml)",
-            nutrients: {
-              calories: 0,
-              protein_g: 0,
-              carbs_g: 0,
-              fat_g: 0,
-              fiber_g: 0,
-              sugar_g: 0,
-              sodium_mg: 0,
-            },
-            source: "manual",
-            confidence: 1.0,
-          },
-        }),
-      });
-      if (res.ok) {
-        toast({ title: "Water added", description: "+1 cup (250 ml)", variant: "success" });
-      } else {
-        toast({ title: "Couldn't save", description: "Try again", variant: "error" });
-      }
-    } catch {
-      toast({ title: "Offline", description: "Backend unreachable", variant: "error" });
-    }
-  }
-
   return (
-    <div className="grid grid-cols-4 gap-2.5 md:gap-3">
-      {linkActions.map((action) => {
+    <div className="grid gap-3 sm:grid-cols-3">
+      {actions.map((action) => {
         const Icon = action.icon;
         return (
-          <Link key={action.label} href={action.href}>
-            <Card className="flex h-full flex-col items-center gap-2 p-3 transition-shadow hover:shadow-card-lg md:flex-row md:gap-3 md:p-4">
+          <Link key={action.href} href={action.href}>
+            <Card
+              className={cn(
+                "flex h-full items-center gap-3 border p-4 transition hover:shadow-card-lg",
+                action.accent,
+              )}
+            >
               <span
-                className={`inline-flex h-9 w-9 items-center justify-center rounded-[11px] ${action.iconBg} ${action.iconColor} shrink-0`}
+                className={cn(
+                  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px]",
+                  action.iconWrap,
+                )}
               >
-                <Icon size={19} />
+                <Icon size={20} />
               </span>
-              <span className="text-center text-[10px] font-bold text-ink-2 md:text-left md:text-[13px] md:text-ink">
-                {action.label}
-              </span>
+              <div className="min-w-0">
+                <div className="text-[15px] font-extrabold text-ink">
+                  {action.title}
+                </div>
+                <p className="mt-0.5 text-[12px] font-medium text-ink-2">
+                  {action.blurb}
+                </p>
+              </div>
             </Card>
           </Link>
         );
       })}
-
-      {/* One-tap water — no form, no navigation */}
-      <button onClick={addWater} type="button">
-        <Card className="flex h-full flex-col items-center gap-2 p-3 transition-shadow hover:shadow-card-lg md:flex-row md:gap-3 md:p-4">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-blue-t text-blue-d">
-            <DropletIcon size={19} />
-          </span>
-          <span className="text-center text-[10px] font-bold text-ink-2 md:text-left md:text-[13px] md:text-ink">
-            Add water
-          </span>
-        </Card>
-      </button>
     </div>
   );
 }

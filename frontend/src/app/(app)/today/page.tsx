@@ -1,106 +1,166 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  getAllEntries,
   getCurrentUser,
   getTodayEntries,
   getTodayTotals,
 } from "@/lib/api";
-import { dailyInsight } from "@/lib/insight";
+import { getToday } from "@/lib/date";
+import { firstName, formatDateLong, greeting } from "@/lib/format";
+import { buildMonthGrid, groupByDate } from "@/lib/history";
+import { waterMl } from "@/lib/nutrition";
 import type { DailyTotals, IntakeEntry, UserProfile } from "@/lib/types";
-import { DashboardHeader } from "@/components/today/DashboardHeader";
-import { CalorieHero } from "@/components/today/CalorieHero";
+import { FlameIcon, PlusIcon } from "@/components/icons";
+import { DashboardSkeleton } from "@/components/today/DashboardSkeleton";
 import { SugarCard } from "@/components/today/SugarCard";
 import { HydrationCard } from "@/components/today/HydrationCard";
 import { QuickActions } from "@/components/today/QuickActions";
-import { RecentEntries } from "@/components/today/RecentEntries";
-import { InsightCard } from "@/components/today/InsightCard";
-import { DashboardSkeleton } from "@/components/today/DashboardSkeleton";
-import { EmptyDashboard } from "@/components/today/EmptyDashboard";
+import { MonthCalendar } from "@/components/history/MonthCalendar";
+import { DayDetail } from "@/components/history/DayDetail";
+import { EntryDetailModal } from "@/components/history/EntryDetailModal";
 
 interface DashboardData {
   user: UserProfile;
   totals: DailyTotals;
-  entries: IntakeEntry[];
-}
-
-/** Fetch the proactive AI daily insight from the backend. */
-async function fetchAIInsight(): Promise<string | null> {
-  try {
-    const res = await fetch("/api/ai/insights/daily?user_id=default", {
-      method: "POST",
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.body || null;
-  } catch {
-    return null;
-  }
+  todayEntries: IntakeEntry[];
+  allEntries: IntakeEntry[];
 }
 
 export default function TodayPage() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<IntakeEntry | null>(null);
+  const todayIso = getToday();
+  const [ty, tm] = [
+    Number(todayIso.slice(0, 4)),
+    Number(todayIso.slice(5, 7)) - 1,
+  ];
+  const [cursor, setCursor] = useState({ year: ty, month0: tm });
+  const [selectedIso, setSelectedIso] = useState(todayIso);
+
+  const refresh = useCallback(() => {
+    Promise.all([
+      getCurrentUser(),
+      getTodayTotals(),
+      getTodayEntries(),
+      getAllEntries(),
+    ]).then(([user, totals, todayEntries, allEntries]) => {
+      setData({ user, totals, todayEntries, allEntries });
+    });
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    Promise.all([getCurrentUser(), getTodayTotals(), getTodayEntries()]).then(
-      ([user, totals, entries]) => {
-        if (active) setData({ user, totals, entries });
-      },
-    );
-    // Fetch the real AI insight in parallel (non-blocking).
-    fetchAIInsight().then((text) => {
-      if (active) setAiInsight(text);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+    refresh();
+  }, [refresh]);
+
+  const byDate = useMemo(
+    () => groupByDate(data?.allEntries ?? []),
+    [data?.allEntries],
+  );
+
+  const grid = useMemo(
+    () =>
+      data
+        ? buildMonthGrid(
+            cursor.year,
+            cursor.month0,
+            byDate,
+            data.user.targets,
+            todayIso,
+          )
+        : [],
+    [cursor, byDate, data, todayIso],
+  );
+
+  const monthLabel = new Date(cursor.year, cursor.month0, 1).toLocaleDateString(
+    "en-US",
+    { month: "long", year: "numeric" },
+  );
+
+  const selectedEntries = byDate.get(selectedIso) ?? [];
 
   if (!data) return <DashboardSkeleton />;
 
-  const { user, totals, entries } = data;
+  const { user, totals, todayEntries } = data;
+  const ml = waterMl(todayEntries);
 
-  if (entries.length === 0) {
-    return <EmptyDashboard fullName={user.fullName} />;
+  function stepMonth(delta: number) {
+    setCursor((c) => {
+      const d = new Date(c.year, c.month0 + delta, 1);
+      return { year: d.getFullYear(), month0: d.getMonth() };
+    });
   }
 
   return (
-    <div className="flex animate-fade-up flex-col gap-4 md:gap-[18px]">
-      <DashboardHeader
-        fullName={user.fullName}
-        dateIso={totals.date}
-        streakDays={user.streakDays}
-      />
-
-      <div className="grid gap-4 md:grid-cols-[1.3fr_1fr] md:gap-[18px]">
-        <CalorieHero
-          totals={totals}
-          targets={user.targets}
-          goalSource={user.goalSource}
-        />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-1 md:gap-[18px]">
-          <SugarCard
-            sugar={totals.totalSugar_g}
-            target={user.targets.sugar_g}
-          />
-          <HydrationCard
-            cups={totals.water_cups}
-            target={user.targets.water_cups}
-          />
+    <div className="flex animate-fade-up flex-col gap-4 md:gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[22px] font-extrabold tracking-tight text-ink md:text-[26px]">
+            {greeting()}, {firstName(user.fullName)}
+          </h1>
+          <p className="mt-1 text-[13px] font-medium text-ink-3">
+            {formatDateLong(totals.date)}
+            {todayEntries.filter((e) => e.type !== "water").length === 0
+              ? " · Nothing logged yet today"
+              : ` · ${todayEntries.filter((e) => e.type !== "water").length} entries today`}
+          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-[11px] bg-card px-3 py-2 text-[12px] font-bold text-amber-d shadow-card">
+            <FlameIcon size={14} />
+            {user.streakDays}-day streak
+          </span>
+          <Link
+            href="/scan"
+            className="inline-flex items-center gap-1.5 rounded-[11px] bg-teal px-3.5 py-2 text-[12.5px] font-bold text-navy-ink transition hover:bg-teal-d"
+          >
+            <PlusIcon size={14} />
+            Log entry
+          </Link>
+        </div>
+      </header>
+
+      <div className="grid items-stretch gap-4 md:grid-cols-2 md:gap-[18px]">
+        <SugarCard sugar={totals.totalSugar_g} target={user.targets.sugar_g} />
+        <HydrationCard
+          ml={ml}
+          targetCups={user.targets.water_cups}
+          onChanged={refresh}
+        />
       </div>
 
       <QuickActions />
 
-      <div className="grid gap-4 md:grid-cols-[1.5fr_1fr] md:gap-[18px]">
-        <RecentEntries entries={entries} />
-        <InsightCard
-          insight={aiInsight ?? dailyInsight(totals, user.targets)}
-          confirmedCount={totals.confirmedCount}
-        />
+      <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:gap-5">
+        <div className="min-w-0">
+          <MonthCalendar
+            monthLabel={monthLabel}
+            cells={grid}
+            selectedIso={selectedIso}
+            todayIso={todayIso}
+            onSelect={setSelectedIso}
+            onPrev={() => stepMonth(-1)}
+            onNext={() => stepMonth(1)}
+          />
+        </div>
+        <div className="min-w-0">
+          <DayDetail
+            dateIso={selectedIso}
+            entries={selectedEntries}
+            targets={user.targets}
+            onSelectEntry={setSelectedEntry}
+          />
+        </div>
       </div>
+
+      {selectedEntry && (
+        <EntryDetailModal
+          entry={selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+        />
+      )}
     </div>
   );
 }

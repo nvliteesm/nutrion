@@ -10,6 +10,7 @@
 */
 @theme {
   --font-sans: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
 
   --color-navy: var(--c-navy);
   --color-navy-2: var(--c-navy-2);
@@ -81,30 +82,30 @@
 }
 
 .dark {
-  --c-navy: #16283d;
-  --c-navy-2: #1b3a5c;
-  --c-navy-ink: #0b1622;
-  --c-teal: #16c496;
+  --c-navy: #101820;
+  --c-navy-2: #1a2736;
+  --c-navy-ink: #070b10;
+  --c-teal: #1ec98f;
   --c-teal-d: #3fd3ad;
-  --c-teal-t: rgba(18, 184, 134, 0.16);
-  --c-blue: #4aa8f0;
-  --c-blue-d: #7cc0f5;
-  --c-blue-t: rgba(62, 155, 232, 0.16);
+  --c-teal-t: rgba(30, 201, 143, 0.14);
+  --c-blue: #3b9ef0;
+  --c-blue-d: #7cb8f5;
+  --c-blue-t: rgba(59, 158, 240, 0.14);
   --c-amber: #f2ad45;
   --c-amber-d: #f4bd6b;
   --c-amber-t: rgba(239, 160, 42, 0.16);
   --c-red: #ef6459;
   --c-red-d: #f2857c;
   --c-red-t: rgba(228, 87, 76, 0.16);
-  --c-ink: #eaf1f8;
-  --c-ink-2: #9db0c4;
-  --c-ink-3: #6e839b;
-  --c-line: #24384f;
-  --c-line-2: #2e4560;
-  --c-app-bg: #0b1622;
-  --c-card: #14263a;
-  --c-shadow: rgba(0, 0, 0, 0.3);
-  --c-shadow-lg: rgba(0, 0, 0, 0.45);
+  --c-ink: #eef3f8;
+  --c-ink-2: #9aadc0;
+  --c-ink-3: #6a7f96;
+  --c-line: #1e2c3c;
+  --c-line-2: #2a3b50;
+  --c-app-bg: #0a0e14;
+  --c-card: #121820;
+  --c-shadow: rgba(0, 0, 0, 0.35);
+  --c-shadow-lg: rgba(0, 0, 0, 0.5);
 }
 
 @keyframes fade-up {
@@ -140,6 +141,24 @@
   }
 }
 
+/* Hydration card — looping water-wave surface */
+@keyframes water-wave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.water-wave-track {
+  animation: water-wave 2.4s linear infinite;
+}
+
+.water-wave-track-fast {
+  animation: water-wave 1.1s linear infinite;
+}
+
 html,
 body {
   height: 100%;
@@ -149,6 +168,10 @@ body {
   background: var(--color-app-bg);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display);
 }
 
 /* Respect reduced-motion preferences. */

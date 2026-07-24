@@ -106,8 +106,9 @@ const modes: {
 }[] = [
   {
     id: "drink",
-    title: "Drink label",
-    blurb: "OCR a nutrition facts label, then confirm before saving.",
+    title: "Drink",
+    blurb:
+      "Reads a nutrition label when present; otherwise AI estimates the beverage (rejects food).",
     accept: "image/*",
     accent: "border-blue/30 bg-blue-t",
   },
@@ -116,7 +117,7 @@ const modes: {
     title: "Food photo",
     blurb: "Vision estimate of items and portions — always editable.",
     accept: "image/*",
-    accent: "border-teal/30 bg-teal-t",
+    accent: "border-line bg-card",
   },
   {
     id: "medical",
@@ -213,7 +214,11 @@ export default function ScanPage() {
       setStep("review");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Analyze failed";
-      setError(`${activeMode?.title ?? "Scan"}: ${msg}`);
+      const withRetry = /try again/i.test(msg)
+        ? msg
+        : `${msg}${msg.endsWith(".") ? "" : "."} Please try again.`;
+      setError(`${activeMode?.title ?? "Scan"}: ${withRetry}`);
+      if (fileRef.current) fileRef.current.value = "";
     } finally {
       setBusy(false);
     }
@@ -239,7 +244,12 @@ export default function ScanPage() {
         setSavedId(`intake #${res.intake_id}`);
       } else if (mode === "food" && food) {
         const res = await confirmFood(analysisId, food);
-        setSavedId(`intake #${res.intake_id}`);
+        const ids = res.intake_ids?.length ? res.intake_ids : [res.intake_id];
+        setSavedId(
+          ids.length === 1
+            ? `intake #${ids[0]}`
+            : `${ids.length} intakes (#${ids.join(", #")})`,
+        );
       } else if (mode === "medical") {
         const res = await confirmMedical(analysisId, metrics);
         setSavedId(`report #${res.report_id ?? res.metric_ids[0]}`);
@@ -403,7 +413,9 @@ export default function ScanPage() {
             <Card className="space-y-4 p-5">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-extrabold text-navy">
-                  Drink label result
+                  {drink.analysis_mode === "photo"
+                    ? "Drink photo estimate"
+                    : "Drink label result"}
                 </h2>
                 <ConfidenceBadge confidence={scoreToConfidence(drink.confidence)} />
               </div>

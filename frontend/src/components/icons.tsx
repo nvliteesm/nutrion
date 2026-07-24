@@ -88,6 +88,15 @@ export const UserIcon = (p: IconProps) => (
   </Stroke>
 );
 
+/** Left sidebar / panel toggle. */
+export const SidebarIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M9 3v18" />
+    <path d="M5 8h2M5 12h2M5 16h2" />
+  </Stroke>
+);
+
 export const CupIcon = (p: IconProps) => (
   <Stroke {...p}>
     <path d="M8 2h8M9 2v3.5a5 5 0 0 1-1 3L6.5 11A4 4 0 0 0 6 13v6a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-6a4 4 0 0 0-.5-2l-1.5-2.5a5 5 0 0 1-1-3V2" />
@@ -96,8 +105,9 @@ export const CupIcon = (p: IconProps) => (
 
 export const UtensilsIcon = (p: IconProps) => (
   <Stroke {...p}>
-    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-    <circle cx="12" cy="13" r="3" />
+    <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+    <path d="M7 2v20" />
+    <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3v7" />
   </Stroke>
 );
 

@@ -29,5 +29,6 @@ export function toggleTheme(): Theme {
   return next;
 }
 
-/** Inline script that sets the theme before first paint (avoids flash). */
-export const themeInitScript = `(function(){try{var t=localStorage.getItem('nutrion.theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`;
+/** Inline script that sets the theme before first paint (avoids flash).
+ *  Defaults to dark to match the NutriON home design. */
+export const themeInitScript = `(function(){try{var t=localStorage.getItem('nutrion.theme');var d=t!=='light';if(d)document.documentElement.classList.add('dark');}catch(e){document.documentElement.classList.add('dark');}})();`;

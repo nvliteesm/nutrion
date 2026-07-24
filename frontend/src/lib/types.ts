@@ -205,6 +205,8 @@ export interface DrinkLabelData {
   caffeine_mg: number | null;
   confidence: number;
   confirmation_status: ConfirmationStatus;
+  /** "label" = OCR nutrition facts; "photo" = vision estimate */
+  analysis_mode?: "label" | "photo" | string;
   raw_text: string;
 }
 
@@ -261,6 +263,7 @@ export interface FoodAnalyzeResponse {
 export interface FoodConfirmResponse {
   analysis_id: string;
   intake_id: number;
+  intake_ids?: number[];
   food: FoodAnalysisData;
   message: string;
 }

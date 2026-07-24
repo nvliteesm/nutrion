@@ -1,19 +1,23 @@
 import { TopNav } from "./TopNav";
 import { BottomNav } from "./BottomNav";
+import { SideNav } from "./SideNav";
 
 /**
- * App chrome shared by every signed-in page:
- *  - desktop: sticky top navbar
- *  - mobile: fixed bottom navbar (content gets bottom padding to clear it)
+ * App chrome:
+ *  - desktop: left icon rail + content
+ *  - mobile: bottom nav (content gets bottom padding)
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-full flex-col bg-app-bg">
-      <TopNav />
-      <main className="mx-auto w-full max-w-[1000px] flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-7">
-        {children}
-      </main>
-      <BottomNav />
+    <div className="flex min-h-full bg-app-bg">
+      <SideNav />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopNav />
+        <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-6">
+          {children}
+        </main>
+        <BottomNav />
+      </div>
     </div>
   );
 }

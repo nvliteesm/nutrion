@@ -10,7 +10,7 @@ import { firstName, greeting } from "@/lib/format";
 
 const actions = [
   { label: "Scan drink label", href: "/scan/drink", icon: CupIcon, cls: "bg-blue-t text-blue-d" },
-  { label: "Scan food", href: "/scan/food", icon: UtensilsIcon, cls: "bg-teal-t text-teal-d" },
+  { label: "Scan food", href: "/scan/food", icon: UtensilsIcon, cls: "bg-app-bg text-ink" },
   { label: "Add manually", href: "/scan/manual", icon: PlusIcon, cls: "bg-navy/[0.06] text-navy" },
   { label: "Add water", href: "/scan/manual", icon: DropletIcon, cls: "bg-blue-t text-blue-d" },
 ];

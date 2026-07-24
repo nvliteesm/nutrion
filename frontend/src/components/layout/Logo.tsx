@@ -1,5 +1,5 @@
+import Image from "next/image";
 import { cn } from "@/lib/cn";
-import { LeafIcon } from "@/components/icons";
 
 export function Logo({
   className,
@@ -8,16 +8,29 @@ export function Logo({
   className?: string;
   markOnly?: boolean;
 }) {
+  if (markOnly) {
+    return (
+      <Image
+        src="/small-icon.png"
+        alt="NutriON"
+        width={566}
+        height={783}
+        className={cn("h-9 w-9 object-contain", className)}
+        priority
+      />
+    );
+  }
+
   return (
-    <div className={cn("flex items-center gap-2.5", className)}>
-      <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-teal text-white">
-        <LeafIcon size={17} />
-      </span>
-      {!markOnly && (
-        <span className="text-[19px] font-extrabold leading-none tracking-tight">
-          NutriON
-        </span>
-      )}
+    <div className={cn("flex items-center", className)}>
+      <Image
+        src="/nutrion-logo.png"
+        alt="NutriON"
+        width={595}
+        height={181}
+        className="h-8 w-auto object-contain md:h-9"
+        priority
+      />
     </div>
   );
 }

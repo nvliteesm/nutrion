@@ -106,6 +106,10 @@ export function buildMonthGrid(
   while (cells.length % 7 !== 0) {
     cells.push({ day: null, dateIso: null, status: null, isFuture: false });
   }
+  // Always 6 weeks so the calendar height stays constant across months.
+  while (cells.length < 42) {
+    cells.push({ day: null, dateIso: null, status: null, isFuture: false });
+  }
   return cells;
 }
 

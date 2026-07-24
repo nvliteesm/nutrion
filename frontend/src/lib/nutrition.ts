@@ -30,12 +30,16 @@ export function sumNutrients(entries: IntakeEntry[]): Nutrients {
   }, emptyNutrients());
 }
 
-/** Count hydration in cups from water entries (~250 ml per cup). */
-export function waterCups(entries: IntakeEntry[]): number {
-  const ml = entries
+/** Count hydration millilitres from water entries. */
+export function waterMl(entries: IntakeEntry[]): number {
+  return entries
     .filter((e) => e.type === "water")
     .reduce((total, e) => total + (e.volumeMl ?? 0), 0);
-  return Math.round(ml / 250);
+}
+
+/** Count hydration in cups from water entries (~250 ml per cup). */
+export function waterCups(entries: IntakeEntry[]): number {
+  return Math.floor(waterMl(entries) / 250);
 }
 
 /**

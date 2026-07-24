@@ -1,26 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, ProgressBar, StatusPill } from "@/components/ui";
+import { Card, ProgressRing } from "@/components/ui";
 import type { DailyStatus } from "@/lib/types";
-
-interface TopSource {
-  name: string;
-  percent: number;
-}
-
-async function fetchTopSource(): Promise<TopSource | null> {
-  try {
-    const res = await fetch("/api/analytics/top-sugar-sources?user_id=default&drinks_only=false&limit=1");
-    if (!res.ok) return null;
-    const data = await res.json();
-    const item = data?.items?.[0];
-    if (!item) return null;
-    return { name: item.name, percent: Math.round(item.percent_of_period_sugar) };
-  } catch {
-    return null;
-  }
-}
+import { cn } from "@/lib/cn";
 
 export function SugarCard({
   sugar,
@@ -29,73 +11,69 @@ export function SugarCard({
   sugar: number;
   target: number;
 }) {
-  const [topSource, setTopSource] = useState<TopSource | null>(null);
-
-  useEffect(() => {
-    fetchTopSource().then(setTopSource);
-  }, []);
-
-  const left = target - sugar;
+  const left = Math.max(target - sugar, 0);
+  const pct = target > 0 ? Math.round((sugar / target) * 100) : 0;
   const status: DailyStatus =
     sugar > target ? "above" : sugar >= target * 0.85 ? "approaching" : "within";
-  const summary =
-    left >= 0 ? `Within target · ${left} g left` : `${Math.abs(left)} g over target`;
+
+  const ringColor =
+    status === "above"
+      ? "text-red"
+      : status === "approaching"
+        ? "text-amber"
+        : "text-teal";
+
+  const badge =
+    status === "above"
+      ? { label: "Over limit", cls: "bg-red-t text-red-d" }
+      : status === "approaching"
+        ? { label: "Getting close", cls: "bg-amber-t text-amber-d" }
+        : { label: "Within target", cls: "bg-teal-t text-teal-d" };
 
   return (
-    <Card className="p-4 md:p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-bold text-ink-2 md:text-[13px]">
-          Total sugar
-        </span>
-        <div className="hidden md:block">
-          <StatusPill status={status} label={statusShort(status)} />
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden p-4 md:p-5">
+      <div className="flex min-h-0 flex-1 items-center gap-3">
+        <ProgressRing
+          value={sugar}
+          max={target}
+          size={76}
+          strokeWidth={8}
+          colorClass={ringColor}
+          trackClass="text-line"
+          className="shrink-0"
+        >
+          <span className="text-[12px] font-extrabold leading-none text-ink">
+            {pct}%
+          </span>
+          <span className="mt-0.5 text-[8px] font-semibold leading-none text-ink-3">
+            of limit
+          </span>
+        </ProgressRing>
+
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12px] font-bold text-ink">
+            Sugar intake
+          </div>
+          <div className="mt-1.5 truncate text-[18px] font-extrabold leading-none text-ink">
+            {Math.round(sugar)}
+            <span className="text-[12px] font-extrabold"> g</span>{" "}
+            <span className="text-[11px] font-semibold text-ink-3">
+              consumed
+            </span>
+          </div>
+          <div className="mt-1 truncate text-[11px] font-semibold text-ink-2">
+            {left} g left · limit {target} g
+          </div>
+          <span
+            className={cn(
+              "mt-2 inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[10px] font-bold",
+              badge.cls,
+            )}
+          >
+            {badge.label}
+          </span>
         </div>
       </div>
-
-      <div className="mb-2.5 mt-2 flex items-baseline gap-1.5">
-        <span className="text-[22px] font-extrabold leading-none text-ink md:text-[28px]">
-          {sugar}
-        </span>
-        <span className="text-[12px] font-semibold text-ink-3 md:text-[13px]">
-          / {target} g
-        </span>
-      </div>
-
-      <ProgressBar
-        value={sugar}
-        max={target}
-        height={8}
-        colorClass={colorFor(status)}
-      />
-
-      <div className={`mt-1.5 text-[10.5px] font-semibold ${textFor(status)}`}>
-        {summary}
-      </div>
-
-      {topSource && (
-        <div className="mt-2 text-[10.5px] font-medium text-ink-3">
-          Top source: <span className="font-semibold text-ink-2">{topSource.name}</span>{" "}
-          ({topSource.percent}% this week)
-        </div>
-      )}
     </Card>
   );
-}
-
-function statusShort(status: DailyStatus): string {
-  if (status === "above") return "Above target";
-  if (status === "approaching") return "Approaching";
-  return "Within target";
-}
-
-function colorFor(status: DailyStatus): string {
-  if (status === "above") return "bg-red";
-  if (status === "approaching") return "bg-amber";
-  return "bg-teal";
-}
-
-function textFor(status: DailyStatus): string {
-  if (status === "above") return "text-red-d";
-  if (status === "approaching") return "text-amber-d";
-  return "text-teal-d";
 }

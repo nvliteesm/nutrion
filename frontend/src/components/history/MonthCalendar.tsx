@@ -33,54 +33,81 @@ export function MonthCalendar({
   onPrev: () => void;
   onNext: () => void;
 }) {
+  // Pad to 42 so the grid is always 6×7 (constant size).
+  const gridCells =
+    cells.length >= 42
+      ? cells.slice(0, 42)
+      : [
+          ...cells,
+          ...Array.from({ length: 42 - cells.length }, () => ({
+            day: null,
+            dateIso: null,
+            status: null,
+            isFuture: false,
+          })),
+        ];
+
   return (
-    <Card className="p-4 md:p-5">
+    <Card className="w-full shrink-0 p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-[14px] font-bold text-ink">{monthLabel}</span>
         <div className="flex items-center gap-4 text-[16px] font-bold text-ink-3">
-          <button onClick={onPrev} aria-label="Previous month" className="px-1">
+          <button
+            type="button"
+            onClick={onPrev}
+            aria-label="Previous month"
+            className="px-1"
+          >
             ‹
           </button>
-          <button onClick={onNext} aria-label="Next month" className="px-1">
+          <button
+            type="button"
+            onClick={onNext}
+            aria-label="Next month"
+            className="px-1"
+          >
             ›
           </button>
         </div>
       </div>
 
-      <div className="mb-2 grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold text-ink-3">
+      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-ink-3">
         {WEEKDAYS.map((d, i) => (
-          <span key={i}>{d}</span>
+          <span key={i} className="h-5 leading-5">
+            {d}
+          </span>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5">
-        {cells.map((cell, i) => {
+      {/* Fixed cell height — no aspect-ratio reflow on select */}
+      <div className="grid grid-cols-7 grid-rows-6 gap-1">
+        {gridCells.map((cell, i) => {
           if (cell.day === null || cell.dateIso === null) {
-            return <div key={i} className="aspect-square" />;
+            return <div key={i} className="h-10 md:h-11" />;
           }
           const isSelected = cell.dateIso === selectedIso;
           const isToday = cell.dateIso === todayIso;
+          const hasDot = Boolean(cell.status && cell.status !== "none");
           return (
             <button
               key={i}
+              type="button"
               onClick={() => !cell.isFuture && onSelect(cell.dateIso!)}
               disabled={cell.isFuture}
               className={cn(
-                "flex aspect-square flex-col items-center justify-center gap-1 rounded-[11px] text-[13px] font-semibold",
+                "box-border flex h-10 flex-col items-center justify-center gap-0.5 rounded-[10px] border-2 text-[13px] font-semibold md:h-11",
                 cell.isFuture ? "text-ink-3" : "text-ink",
-                isSelected && "border-2 border-navy text-navy",
-                isToday && !isSelected && "ring-1 ring-navy/30",
+                isSelected ? "border-teal text-teal-d" : "border-transparent",
+                isToday && !isSelected && "ring-1 ring-teal/30",
               )}
             >
-              {cell.day}
-              {cell.status && cell.status !== "none" && (
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    calendarColor[cell.status],
-                  )}
-                />
-              )}
+              <span className="leading-none">{cell.day}</span>
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  hasDot ? calendarColor[cell.status!] : "bg-transparent",
+                )}
+              />
             </button>
           );
         })}
@@ -92,7 +119,9 @@ export function MonthCalendar({
             key={status}
             className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-2"
           >
-            <span className={cn("h-2.5 w-2.5 rounded-full", calendarColor[status])} />
+            <span
+              className={cn("h-2.5 w-2.5 rounded-full", calendarColor[status])}
+            />
             {calendarLabel[status]}
           </span>
         ))}

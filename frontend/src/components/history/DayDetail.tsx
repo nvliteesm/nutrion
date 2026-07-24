@@ -1,6 +1,6 @@
 import { Card, Badge, SourceBadge, type BadgeTone } from "@/components/ui";
-import { PencilIcon, TrashIcon } from "@/components/icons";
-import { formatDateLong, formatNumber } from "@/lib/format";
+import { CupIcon, UtensilsIcon } from "@/components/icons";
+import { formatDateLong, formatNumber, formatTime } from "@/lib/format";
 import {
   calendarLabel,
   calendarStatus,
@@ -8,6 +8,7 @@ import {
 } from "@/lib/history";
 import { buildDailyTotals } from "@/lib/nutrition";
 import type { IntakeEntry, NutritionTargets } from "@/lib/types";
+import { cn } from "@/lib/cn";
 
 const statusTone: Record<CalendarStatus, BadgeTone> = {
   within: "teal",
@@ -21,29 +22,28 @@ export function DayDetail({
   dateIso,
   entries,
   targets,
-  onEdit,
-  onDelete,
+  onSelectEntry,
 }: {
   dateIso: string;
   entries: IntakeEntry[];
   targets: NutritionTargets;
-  onEdit: (entry: IntakeEntry) => void;
-  onDelete: (id: string) => void;
+  onSelectEntry?: (entry: IntakeEntry) => void;
 }) {
   const totals = buildDailyTotals(dateIso, entries, targets);
   const status = calendarStatus(totals, targets);
   const nonWater = entries
     .filter((e) => e.type !== "water")
     .sort((a, b) => (a.loggedAt < b.loggedAt ? -1 : 1));
-  const estimated = nonWater.filter((e) => e.source === "ai").length;
 
   return (
-    <Card className="self-start p-5">
-      <div className="mb-1 flex items-center justify-between">
+    <Card className="w-full self-start p-5">
+      <div className="mb-1 flex min-h-[28px] items-center justify-between gap-2">
         <span className="text-[16px] font-extrabold text-ink">
           {formatDateLong(dateIso)}
         </span>
-        <Badge tone={statusTone[status]}>{calendarLabel[status]}</Badge>
+        {status !== "none" && (
+          <Badge tone={statusTone[status]}>{calendarLabel[status]}</Badge>
+        )}
       </div>
 
       {totals.entryCount === 0 ? (
@@ -59,8 +59,8 @@ export function DayDetail({
               sub={`/ ${formatNumber(targets.calories)}`}
             />
             <Metric
-              label="Total sugar"
-              value={`${totals.totalSugar_g}`}
+              label="Added sugar"
+              value={`${totals.addedSugar_g}`}
               sub={`/ ${targets.sugar_g} g`}
               accent="amber"
             />
@@ -75,44 +75,49 @@ export function DayDetail({
 
           <div className="mb-1.5 text-[11px] font-bold tracking-wide text-ink-3">
             ENTRIES · {nonWater.length}
-            {estimated > 0 ? ` · ${estimated} estimated` : " · all confirmed"}
           </div>
 
           <ul>
-            {nonWater.map((entry, i) => (
-              <li
-                key={entry.id}
-                className={`flex items-center gap-2.5 py-2.5 ${
-                  i < nonWater.length - 1 ? "border-b border-line" : ""
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[12.5px] font-semibold text-ink">
-                      {entry.name}
+            {nonWater.map((entry, i) => {
+              const Icon = entry.type === "drink" ? CupIcon : UtensilsIcon;
+              return (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectEntry?.(entry)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 py-2.5 text-left transition hover:bg-app-bg/80",
+                      i < nonWater.length - 1 ? "border-b border-line" : "",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px]",
+                        entry.type === "drink"
+                          ? "bg-blue-t text-blue-d"
+                          : "bg-teal-t text-teal-d",
+                      )}
+                    >
+                      <Icon size={15} />
                     </span>
-                    <SourceBadge source={entry.source} />
-                  </div>
-                </div>
-                <span className="text-[11.5px] font-semibold text-ink-3">
-                  {formatNumber(entry.nutrients.calories)} kcal
-                </span>
-                <button
-                  onClick={() => onEdit(entry)}
-                  aria-label={`Edit ${entry.name}`}
-                  className="text-ink-3 hover:text-navy"
-                >
-                  <PencilIcon size={15} />
-                </button>
-                <button
-                  onClick={() => onDelete(entry.id)}
-                  aria-label={`Delete ${entry.name}`}
-                  className="text-ink-3 hover:text-red-d"
-                >
-                  <TrashIcon size={15} />
-                </button>
-              </li>
-            ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-[12.5px] font-semibold text-ink">
+                          {entry.name}
+                        </span>
+                        <SourceBadge source={entry.source} />
+                      </div>
+                      <div className="text-[10.5px] font-medium text-ink-3">
+                        {formatTime(entry.loggedAt)}
+                      </div>
+                    </div>
+                    <span className="text-[11.5px] font-semibold text-ink-3">
+                      {formatNumber(entry.nutrients.calories)} kcal
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </>
       )}
@@ -132,7 +137,11 @@ function Metric({
   accent?: "amber" | "blue";
 }) {
   const labelColor =
-    accent === "amber" ? "text-amber-d" : accent === "blue" ? "text-blue-d" : "text-ink-3";
+    accent === "amber"
+      ? "text-amber-d"
+      : accent === "blue"
+        ? "text-blue-d"
+        : "text-ink-3";
   return (
     <div className="rounded-[11px] bg-app-bg px-3 py-2.5">
       <div className={`text-[10.5px] font-semibold ${labelColor}`}>{label}</div>

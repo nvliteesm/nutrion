@@ -2,39 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getAllEntries } from "@/lib/api";
-import { deleteEntry, restoreEntry, updateEntry } from "@/lib/store";
-import { Skeleton, useToast } from "@/components/ui";
+import { Skeleton } from "@/components/ui";
 import { getToday } from "@/lib/date";
 import { DEFAULT_TARGETS } from "@/lib/types";
-import {
-  buildMonthGrid,
-  groupByDate,
-  weekSummary,
-} from "@/lib/history";
+import { buildMonthGrid, groupByDate, weekSummary } from "@/lib/history";
 import type { IntakeEntry } from "@/lib/types";
 import { WeekSummaryCard } from "@/components/history/WeekSummaryCard";
 import { MonthCalendar } from "@/components/history/MonthCalendar";
 import { DayDetail } from "@/components/history/DayDetail";
-import { EditEntryDialog } from "@/components/history/EditEntryDialog";
+import { EntryDetailModal } from "@/components/history/EntryDetailModal";
 
 const targets = DEFAULT_TARGETS;
 
 export default function HistoryPage() {
   const [entries, setEntries] = useState<IntakeEntry[] | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<IntakeEntry | null>(null);
   const todayIso = getToday();
   const [ty, tm] = [Number(todayIso.slice(0, 4)), Number(todayIso.slice(5, 7)) - 1];
   const [cursor, setCursor] = useState({ year: ty, month0: tm });
   const [selectedIso, setSelectedIso] = useState(todayIso);
-  const [editing, setEditing] = useState<IntakeEntry | null>(null);
 
   useEffect(() => {
     getAllEntries().then(setEntries);
   }, []);
 
-  const byDate = useMemo(
-    () => groupByDate(entries ?? []),
-    [entries],
-  );
+  const byDate = useMemo(() => groupByDate(entries ?? []), [entries]);
 
   const grid = useMemo(
     () => buildMonthGrid(cursor.year, cursor.month0, byDate, targets, todayIso),
@@ -53,38 +45,6 @@ export default function HistoryPage() {
 
   const selectedEntries = byDate.get(selectedIso) ?? [];
 
-  const { toast } = useToast();
-
-  function refresh() {
-    getAllEntries().then(setEntries);
-  }
-
-  function handleDelete(id: string) {
-    const removed = (entries ?? []).find((e) => e.id === id);
-    deleteEntry(id);
-    refresh();
-    toast({
-      title: "Entry deleted",
-      description: removed?.name,
-      variant: "info",
-      action: removed
-        ? {
-            label: "Undo",
-            onClick: () => {
-              restoreEntry(removed);
-              refresh();
-            },
-          }
-        : undefined,
-    });
-  }
-
-  function handleSaveEdit(id: string, patch: Partial<IntakeEntry>) {
-    updateEntry(id, patch);
-    refresh();
-    toast({ title: "Entry updated", variant: "success" });
-  }
-
   function stepMonth(delta: number) {
     setCursor((c) => {
       const d = new Date(c.year, c.month0 + delta, 1);
@@ -95,8 +55,10 @@ export default function HistoryPage() {
   if (!entries) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-[24px] font-extrabold tracking-tight text-ink">History</h1>
-        <div className="grid gap-4 md:grid-cols-[1fr_340px] md:gap-6">
+        <h1 className="text-[24px] font-extrabold tracking-tight text-ink">
+          History
+        </h1>
+        <div className="grid items-start gap-4 md:grid-cols-[1fr_340px] md:gap-6">
           <div className="flex flex-col gap-4">
             <Skeleton className="h-24" />
             <Skeleton className="h-80" />
@@ -113,7 +75,7 @@ export default function HistoryPage() {
         History
       </h1>
 
-      <div className="grid gap-4 md:grid-cols-[1fr_340px] md:gap-6">
+      <div className="grid items-start gap-4 md:grid-cols-[1fr_340px] md:gap-6">
         <div className="flex flex-col gap-4">
           <WeekSummaryCard summary={week} />
           <MonthCalendar
@@ -131,16 +93,14 @@ export default function HistoryPage() {
           dateIso={selectedIso}
           entries={selectedEntries}
           targets={targets}
-          onEdit={setEditing}
-          onDelete={handleDelete}
+          onSelectEntry={setSelectedEntry}
         />
       </div>
 
-      {editing && (
-        <EditEntryDialog
-          entry={editing}
-          onClose={() => setEditing(null)}
-          onSave={handleSaveEdit}
+      {selectedEntry && (
+        <EntryDetailModal
+          entry={selectedEntry}
+          onClose={() => setSelectedEntry(null)}
         />
       )}
     </div>
