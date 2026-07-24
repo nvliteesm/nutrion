@@ -65,50 +65,95 @@ export function ManualForm() {
     setN({ ...zeroNutrients(), ...fav.nutrients });
   }
 
-  function handleSave() {
-    if (!canSave) return;
-    const loggedAt = `${getToday()}T${time}:00`;
+  const [submitting, setSubmitting] = useState(false);
 
-    let entry: Omit<IntakeEntry, "id">;
-    if (tab === "water") {
-      entry = {
-        type: "water",
-        name: "Water",
-        loggedAt,
-        source: "manual",
-        confirmed: true,
-        volumeMl,
-        nutrients: zeroNutrients(),
-      };
-    } else {
-      entry = {
-        type: tab,
-        name: name.trim(),
-        loggedAt,
-        source: "manual",
-        confirmed: true,
-        portion: tab === "drink" ? `${volumeMl} ml` : portion || undefined,
-        volumeMl: tab === "drink" ? volumeMl : undefined,
-        nutrients: { ...n },
-      };
-      if (saveFav) {
+  async function handleSave() {
+    if (!canSave || submitting) return;
+    setSubmitting(true);
+
+    const serving =
+      tab === "water"
+        ? `1 cup (${volumeMl} ml)`
+        : tab === "drink"
+          ? `${volumeMl} ml`
+          : portion || "1 serving";
+
+    const meal = {
+      name: tab === "water" ? "Water" : name.trim(),
+      serving,
+      nutrients: {
+        calories: tab === "water" ? 0 : n.calories,
+        protein_g: tab === "water" ? 0 : n.protein_g,
+        carbs_g: tab === "water" ? 0 : n.carbs_g,
+        fat_g: tab === "water" ? 0 : n.fat_g,
+        fiber_g: 0,
+        sugar_g: tab === "water" ? 0 : n.totalSugar_g,
+        sodium_mg: 0,
+      },
+      source: "manual",
+      confidence: 1.0,
+    };
+
+    try {
+      const res = await fetch("/memory/intakes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: "default", meal }),
+      });
+
+      if (!res.ok) {
+        // Fallback to localStorage if backend fails.
+        const loggedAt = `${getToday()}T${time}:00`;
+        addEntry({
+          type: tab,
+          name: meal.name,
+          loggedAt,
+          source: "manual",
+          confirmed: true,
+          portion: serving,
+          volumeMl: tab !== "food" ? volumeMl : undefined,
+          nutrients: { ...n, addedSugar_g: 0 },
+        });
+      }
+
+      if (saveFav && tab !== "water") {
         addFavorite({
           type: tab,
           name: name.trim(),
-          portion: tab === "drink" ? `${volumeMl} ml` : portion || undefined,
+          portion: serving,
           volumeMl: tab === "drink" ? volumeMl : undefined,
-          nutrients: { ...n },
+          nutrients: { ...n, addedSugar_g: 0 },
         });
       }
-    }
 
-    addEntry(entry);
-    toast({
-      title: "Entry saved",
-      description: tab === "water" ? "Water added to Today" : `${entry.name} added to Today`,
-      variant: "success",
-    });
-    router.push("/today");
+      toast({
+        title: "Entry saved",
+        description: tab === "water" ? "Water added to Today" : `${meal.name} added to Today`,
+        variant: "success",
+      });
+      router.push("/today");
+    } catch {
+      // Network error — save locally as fallback.
+      const loggedAt = `${getToday()}T${time}:00`;
+      addEntry({
+        type: tab,
+        name: meal.name,
+        loggedAt,
+        source: "manual",
+        confirmed: true,
+        portion: serving,
+        volumeMl: tab !== "food" ? volumeMl : undefined,
+        nutrients: { ...n, addedSugar_g: 0 },
+      });
+      toast({
+        title: "Saved locally",
+        description: "Backend unreachable — saved to this device.",
+        variant: "info",
+      });
+      router.push("/today");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const tabFavorites = favorites.filter((f) => f.type === tab);
@@ -232,8 +277,8 @@ export function ManualForm() {
           <Button variant="outline" onClick={() => router.push("/scan")}>
             Cancel
           </Button>
-          <Button fullWidth onClick={handleSave} disabled={!canSave}>
-            Save entry
+          <Button fullWidth onClick={handleSave} disabled={!canSave || submitting}>
+            {submitting ? "Saving…" : "Save entry"}
           </Button>
         </div>
       </Card>
