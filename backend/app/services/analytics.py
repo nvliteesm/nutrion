@@ -12,7 +12,7 @@ from typing import Optional
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.orm import Intake, MedicalMetric
+from app.models.orm import Intake, MedicalReport
 from app.models.schemas import (
     DailyTotals,
     LoggingCompleteness,
@@ -528,32 +528,10 @@ async def get_logging_completeness(
     )
 
 
-def medical_to_record(row: MedicalMetric) -> MedicalMetricRecord:
-    measured = row.test_date
-    measured_at = (
-        datetime.combine(measured, datetime.min.time())
-        if measured is not None
-        else row.created_at
-    )
-    return MedicalMetricRecord(
-        id=row.id,
-        user_id=row.user_id,
-        analysis_id=row.analysis_id or "",
-        metric_name=row.metric_name,
-        category=row.category or "other",
-        value=row.value,
-        unit=row.unit or "",
-        reference_min=row.reference_min,
-        reference_max=row.reference_max,
-        reference_range_text=row.reference_range_text or "",
-        status=row.status or "unknown",
-        test_date=row.test_date,
-        source_page=row.source_page,
-        extraction_confidence=float(row.extraction_confidence or 0.5),
-        confirmed=bool(row.confirmed),
-        file_path=row.file_path or "",
-        created_at=row.created_at or measured_at,
-    )
+def medical_to_record(row: MedicalReport) -> list[MedicalMetricRecord]:
+    from app.services.medical_report import report_to_metric_records
+
+    return report_to_metric_records(row)
 
 
 async def get_latest_medical_metrics(
@@ -562,21 +540,24 @@ async def get_latest_medical_metrics(
     user_id: str = "default",
     confirmed_only: bool = True,
 ) -> list[MedicalMetricRecord]:
-    filters = [MedicalMetric.user_id == user_id]
+    from app.services.medical_report import report_to_metric_records
+
+    filters = [MedicalReport.user_id == user_id]
     if confirmed_only:
-        filters.append(MedicalMetric.confirmed.is_(True))
+        filters.append(MedicalReport.confirmed.is_(True))
     stmt = (
-        select(MedicalMetric)
+        select(MedicalReport)
         .where(and_(*filters))
-        .order_by(MedicalMetric.created_at.desc(), MedicalMetric.id.desc())
+        .order_by(MedicalReport.created_at.desc(), MedicalReport.id.desc())
     )
     rows = (await db.execute(stmt)).scalars().all()
-    latest: dict[str, MedicalMetric] = {}
-    for row in rows:
-        key = (row.metric_name or "").strip().lower() or f"id-{row.id}"
-        if key not in latest:
-            latest[key] = row
-    return [medical_to_record(r) for r in latest.values()]
+    latest: dict[str, MedicalMetricRecord] = {}
+    for report in rows:
+        for rec in report_to_metric_records(report):
+            key = (rec.metric_name or "").strip().lower()
+            if key and key not in latest:
+                latest[key] = rec
+    return list(latest.values())
 
 
 async def compare_periods(

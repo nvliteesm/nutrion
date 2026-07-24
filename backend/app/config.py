@@ -1,11 +1,37 @@
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from pydantic import computed_field
+from pydantic import computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
+DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{(DATA_DIR / 'nutrion.db').as_posix()}"
+
+
+def normalize_database_url(url: str) -> str:
+    """Accept postgres:// / postgresql:// and force asyncpg driver for Postgres."""
+    value = (url or "").strip()
+    if not value:
+        return DEFAULT_SQLITE_URL
+    # Common mistake: pasting the Supabase HTTPS project URL into DATABASE_URL
+    if value.startswith("http://") or value.startswith("https://"):
+        return DEFAULT_SQLITE_URL
+    if value.startswith("postgres://"):
+        value = "postgresql+asyncpg://" + value[len("postgres://") :]
+    elif value.startswith("postgresql://"):
+        value = "postgresql+asyncpg://" + value[len("postgresql://") :]
+    # Drop libpq-only sslmode; asyncpg gets SSL via connect_args.
+    if "sslmode=" in value:
+        parsed = urlparse(value)
+        query = [
+            (k, v)
+            for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+            if k != "sslmode"
+        ]
+        value = urlunparse(parsed._replace(query=urlencode(query)))
+    return value
 
 
 def _normalize_openai_v1_base(endpoint: str) -> str:
@@ -42,7 +68,19 @@ class Settings(BaseSettings):
     debug: bool = True
     cors_origins: str = "http://localhost:3000"
 
-    database_url: str = f"sqlite+aiosqlite:///{(DATA_DIR / 'nutrion.db').as_posix()}"
+    # Prefer DATABASE_URL. Supabase: Project Settings → Database → URI
+    database_url: str = DEFAULT_SQLITE_URL
+    # None = auto (TLS on for Postgres / Supabase)
+    database_ssl: bool | None = None
+    # Set false on networks that MITM TLS (campus/corporate proxies)
+    database_ssl_verify: bool = True
+
+    # Optional Supabase project metadata (auth/storage later)
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
+    supabase_jwt_secret: str = ""
+
     chroma_path: str = str(DATA_DIR / "chroma")
     upload_dir: str = str(DATA_DIR / "uploads")
 
@@ -68,10 +106,56 @@ class Settings(BaseSettings):
     allow_stub_embeddings: bool = True
     rag_top_k: int = 5
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_db_url(cls, value: object) -> str:
+        return normalize_database_url(str(value or ""))
+
+    @field_validator("database_ssl", mode="before")
+    @classmethod
+    def _empty_ssl_to_none(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
+
+    @field_validator("database_ssl_verify", mode="before")
+    @classmethod
+    def _empty_ssl_verify_default(cls, value: object) -> object:
+        if value is None:
+            return True
+        if isinstance(value, str) and value.strip() == "":
+            return True
+        return value
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.database_url.startswith("sqlite")
+
+    @property
+    def is_postgres(self) -> bool:
+        return self.database_url.startswith("postgresql")
+
+    @property
+    def uses_supabase(self) -> bool:
+        host = self.database_url.lower()
+        return (
+            "supabase.co" in host
+            or "supabase.com" in host
+            or bool(self.supabase_url.strip())
+        )
+
+    @property
+    def ssl_enabled(self) -> bool:
+        if self.database_ssl is not None:
+            return bool(self.database_ssl)
+        return self.is_postgres
 
     @property
     def has_azure_key(self) -> bool:

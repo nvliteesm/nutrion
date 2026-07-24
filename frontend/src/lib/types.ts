@@ -281,6 +281,7 @@ export interface MedicalAnalyzeResponse {
 
 export interface MedicalConfirmResponse {
   analysis_id: string;
+  report_id: number;
   metric_ids: number[];
   metrics: MedicalMetricData[];
   message: string;

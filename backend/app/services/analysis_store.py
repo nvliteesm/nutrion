@@ -10,7 +10,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.orm import Analysis, Intake, MedicalMetric
+from app.models.orm import Analysis, Intake, MedicalReport
 from app.models.schemas import (
     ConfirmationStatus,
     DrinkLabelData,
@@ -19,8 +19,10 @@ from app.models.schemas import (
     IntakeRecord,
     MedicalMetricData,
     MedicalMetricRecord,
+    MedicalReportRecord,
     NutrientValues,
 )
+from app.services.medical_report import build_report_row, report_to_metric_records
 
 AnalysisKind = Literal["food", "drink", "medical"]
 
@@ -193,55 +195,51 @@ async def save_medical_metrics(
     user_id: str,
     analysis_id: str,
     file_path: str = "",
-) -> list[MedicalMetric]:
-    rows: list[MedicalMetric] = []
-    for m in metrics:
-        m.confirmed = True
-        row = MedicalMetric(
-            user_id=user_id,
-            analysis_id=analysis_id,
-            metric_name=m.metric_name,
-            category=m.category.value if hasattr(m.category, "value") else str(m.category),
-            value=m.value,
-            unit=m.unit,
-            reference_min=m.reference_min,
-            reference_max=m.reference_max,
-            reference_range_text=m.reference_range_text,
-            status=m.status.value if hasattr(m.status, "value") else str(m.status),
-            test_date=m.test_date,
-            source_page=m.source_page,
-            extraction_confidence=m.extraction_confidence,
-            confirmed=True,
-            file_path=file_path,
-        )
-        session.add(row)
-        rows.append(row)
+) -> MedicalReport:
+    """Save one medical report row (all Blood Sugar + Lipid metrics together)."""
+    row = build_report_row(
+        metrics=metrics,
+        user_id=user_id,
+        analysis_id=analysis_id,
+        file_path=file_path,
+        confirmed=True,
+    )
+    session.add(row)
     await session.commit()
-    for row in rows:
-        await session.refresh(row)
-    return rows
+    await session.refresh(row)
+    return row
 
 
-def medical_to_record(row: MedicalMetric) -> MedicalMetricRecord:
-    return MedicalMetricRecord(
+def medical_report_to_record(row: MedicalReport) -> MedicalReportRecord:
+    return MedicalReportRecord(
         id=row.id,
         user_id=row.user_id,
-        analysis_id=row.analysis_id,
-        metric_name=row.metric_name,
-        category=row.category,
-        value=row.value,
-        unit=row.unit,
-        reference_min=row.reference_min,
-        reference_max=row.reference_max,
-        reference_range_text=row.reference_range_text,
-        status=row.status,
+        analysis_id=row.analysis_id or "",
         test_date=row.test_date,
-        source_page=row.source_page,
-        extraction_confidence=row.extraction_confidence,
-        confirmed=row.confirmed,
         file_path=row.file_path or "",
+        confidence=float(row.confidence or 0.5),
+        confirmed=bool(row.confirmed),
+        notes=row.notes or "",
+        hba1c=row.hba1c,
+        hba1c_status=row.hba1c_status,
+        fasting_glucose=row.fasting_glucose,
+        fasting_glucose_status=row.fasting_glucose_status,
+        total_cholesterol=row.total_cholesterol,
+        total_cholesterol_status=row.total_cholesterol_status,
+        ldl=row.ldl,
+        ldl_status=row.ldl_status,
+        hdl=row.hdl,
+        hdl_status=row.hdl_status,
+        triglycerides=row.triglycerides,
+        triglycerides_status=row.triglycerides_status,
         created_at=row.created_at,
+        metrics=report_to_metric_records(row),
     )
+
+
+def medical_to_record(row: MedicalReport) -> list[MedicalMetricRecord]:
+    """Back-compat: expand report into per-metric records."""
+    return report_to_metric_records(row)
 
 
 async def list_medical_metrics(
@@ -250,11 +248,31 @@ async def list_medical_metrics(
     user_id: str | None = None,
     limit: int = 50,
 ) -> list[MedicalMetricRecord]:
-    stmt = select(MedicalMetric).order_by(MedicalMetric.created_at.desc()).limit(limit)
+    """Latest values per metric name (expanded from medical_reports)."""
+    stmt = select(MedicalReport).order_by(MedicalReport.created_at.desc()).limit(limit)
     if user_id:
-        stmt = stmt.where(MedicalMetric.user_id == user_id)
+        stmt = stmt.where(MedicalReport.user_id == user_id)
     result = await session.execute(stmt)
-    return [medical_to_record(r) for r in result.scalars().all()]
+    latest: dict[str, MedicalMetricRecord] = {}
+    for report in result.scalars().all():
+        for rec in report_to_metric_records(report):
+            key = rec.metric_name.lower()
+            if key not in latest:
+                latest[key] = rec
+    return list(latest.values())
+
+
+async def list_medical_reports(
+    session: AsyncSession,
+    *,
+    user_id: str | None = None,
+    limit: int = 50,
+) -> list[MedicalReportRecord]:
+    stmt = select(MedicalReport).order_by(MedicalReport.created_at.desc()).limit(limit)
+    if user_id:
+        stmt = stmt.where(MedicalReport.user_id == user_id)
+    result = await session.execute(stmt)
+    return [medical_report_to_record(r) for r in result.scalars().all()]
 
 
 def intake_to_record(row: Intake) -> IntakeRecord:

@@ -218,7 +218,7 @@ export default function ScanPage() {
         setSavedId(`intake #${res.intake_id}`);
       } else if (mode === "medical") {
         const res = await confirmMedical(analysisId, metrics);
-        setSavedId(`${res.metric_ids.length} metric(s)`);
+        setSavedId(`report #${res.report_id ?? res.metric_ids[0]}`);
       }
       setStep("done");
     } catch (err) {
