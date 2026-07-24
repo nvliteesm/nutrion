@@ -1,4 +1,9 @@
-import type { ExtractedDrink, FoodAnalysis, Nutrients } from "./types";
+import type {
+  ExtractedDrink,
+  FoodAnalysis,
+  MedicalMetric,
+  Nutrients,
+} from "./types";
 
 /**
  * Mock OCR/label extraction. Returns the seeded "Sparkling Yerba Mate" label
@@ -78,4 +83,64 @@ export function analyzeFoodPhoto(): Promise<FoodAnalysis> {
     ],
   };
   return new Promise((resolve) => setTimeout(() => resolve(result), 2200));
+}
+
+
+/**
+ * Mock medical-report extraction (Premium). Returns unconfirmed metrics with
+ * reference ranges and per-field confidence, mirroring the mockup.
+ *
+ * Replace with real OCR/parse later — keep the `MedicalMetric` return shape.
+ * Only metrics the user confirms should ever be stored or used by AI.
+ */
+export function extractMedicalReport(): Promise<MedicalMetric[]> {
+  const metrics: MedicalMetric[] = [
+    {
+      id: "hba1c",
+      name: "HbA1c",
+      value: 5.9,
+      unit: "%",
+      refLow: 4.0,
+      refHigh: 5.6,
+      referenceText: "4.0–5.6 %",
+      page: 2,
+      confidence: "high",
+      confirmed: false,
+    },
+    {
+      id: "glucose",
+      name: "Fasting glucose",
+      value: 104,
+      unit: "mg/dL",
+      refLow: 70,
+      refHigh: 99,
+      referenceText: "70–99 mg/dL",
+      page: 2,
+      confidence: "high",
+      confirmed: false,
+    },
+    {
+      id: "ldl",
+      name: "LDL cholesterol",
+      value: 128,
+      unit: "mg/dL",
+      refHigh: 100,
+      referenceText: "< 100 mg/dL",
+      page: 3,
+      confidence: "high",
+      confirmed: false,
+    },
+    {
+      id: "hdl",
+      name: "HDL cholesterol",
+      value: 51,
+      unit: "mg/dL",
+      refLow: 40,
+      referenceText: "> 40 mg/dL",
+      page: 3,
+      confidence: "low",
+      confirmed: false,
+    },
+  ];
+  return new Promise((resolve) => setTimeout(() => resolve(metrics), 2200));
 }

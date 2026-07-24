@@ -102,6 +102,21 @@ export interface ExtractedDrink {
   lowConfidenceFields: string[];
 }
 
+/** A metric extracted from a medical report (Premium). */
+export interface MedicalMetric {
+  id: string;
+  name: string;
+  value: number;
+  unit: string;
+  /** Numeric reference bounds where available (open-ended if undefined). */
+  refLow?: number;
+  refHigh?: number;
+  referenceText: string;
+  page: number;
+  confidence: Confidence;
+  confirmed: boolean;
+}
+
 /** A single food item detected in a photo (per-serving estimate). */
 export interface DetectedFoodItem {
   id: string;

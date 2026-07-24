@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Card, Badge, ProgressBar } from "@/components/ui";
 import {
   AlertTriangleIcon,
+  BulbIcon,
   ChartIcon,
   SearchIcon,
   SparkleIcon,
@@ -158,6 +160,23 @@ export function InsightsPremium({
           days have complete meal logs, so averages may be underestimated.
         </p>
       </div>
+
+      <Link href="/assistant" className="mt-4 block">
+        <Card className="flex items-center gap-3 p-4 transition-shadow hover:shadow-card-lg">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-[11px] bg-navy text-teal">
+            <BulbIcon size={18} />
+          </span>
+          <div className="flex-1">
+            <div className="text-[14px] font-bold text-ink">
+              Ask the nutrition assistant
+            </div>
+            <div className="text-[12px] font-medium text-ink-2">
+              Questions about your confirmed history — no diagnosis, just context.
+            </div>
+          </div>
+          <span className="text-ink-3">›</span>
+        </Card>
+      </Link>
     </div>
   );
 }

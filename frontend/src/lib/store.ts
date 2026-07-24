@@ -1,5 +1,5 @@
 import { mockSeedEntries } from "./mock-data";
-import type { Favorite, IntakeEntry } from "./types";
+import type { Favorite, IntakeEntry, MedicalMetric } from "./types";
 
 /**
  * Client-side data store (localStorage-backed).
@@ -12,6 +12,7 @@ import type { Favorite, IntakeEntry } from "./types";
 // v2: seed now includes a full month of history.
 const ENTRIES_KEY = "nutrion.entries.v2";
 const FAVORITES_KEY = "nutrion.favorites";
+const METRICS_KEY = "nutrion.metrics";
 
 function read<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -74,4 +75,13 @@ export function addFavorite(fav: Omit<Favorite, "id">): Favorite {
   const withId: Favorite = { ...fav, id: genId() };
   write(FAVORITES_KEY, [withId, ...getFavorites()]);
   return withId;
+}
+
+/** Confirmed medical metrics (Premium). Only confirmed values are stored. */
+export function getMedicalMetrics(): MedicalMetric[] {
+  return read<MedicalMetric[]>(METRICS_KEY) ?? [];
+}
+
+export function saveMedicalMetrics(metrics: MedicalMetric[]): void {
+  write(METRICS_KEY, metrics);
 }
