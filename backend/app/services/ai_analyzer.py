@@ -17,8 +17,11 @@ from app.services import ai_tools, analytics
 from app.services.ai_safety import (
     ANALYZER_SYSTEM_PROMPT,
     MEDICAL_DISCLAIMER,
+    SAFETY_BLOCK_RESPONSE,
     build_user_prompt,
     is_medically_sensitive,
+    screen_user_input,
+    validate_model_output,
 )
 from app.services.foundry import FoundryError, foundry
 from app.services.knowledge_rag import retrieve_education
@@ -270,6 +273,22 @@ async def analyze(
     start: Optional[date] = None,
     end: Optional[date] = None,
 ) -> AnalyzeResponse:
+    today = date.today()
+
+    # Safety harness: hello / injection / misuse / off-topic — no analytics or LLM.
+    verdict = screen_user_input(question)
+    if not verdict.allowed:
+        return AnalyzeResponse(
+            answer=verdict.canned_response or "",
+            period_start=today,
+            period_end=today,
+            tools_used=[],
+            sources=[],
+            evidence={"safety": {"blocked": True, "reason": verdict.reason}},
+            medical_disclaimer=None,
+            incomplete_logging=False,
+        )
+
     period_kind, p_start, p_end = _infer_period(question, day=day, start=start, end=end)
     intents = _infer_intents(question)
 
@@ -312,9 +331,12 @@ async def analyze(
             period_end=p_end,
         )
 
-    # Ensure period is present even if the model omitted it.
-    if p_start.isoformat() not in answer and "Analysis period" not in answer:
-        answer = f"Analysis period: {p_start.isoformat()} to {p_end.isoformat()}. {answer}"
+    answer = validate_model_output(answer)
+
+    # Ensure period is present even if the model omitted it (skip canned safety replies).
+    if answer != SAFETY_BLOCK_RESPONSE and "I am not trained to answer question" not in answer:
+        if p_start.isoformat() not in answer and "Analysis period" not in answer:
+            answer = f"Analysis period: {p_start.isoformat()} to {p_end.isoformat()}. {answer}"
 
     return AnalyzeResponse(
         answer=answer.strip(),
