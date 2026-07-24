@@ -1,4 +1,4 @@
-import { mockTodayEntries } from "./mock-data";
+import { mockSeedEntries } from "./mock-data";
 import type { Favorite, IntakeEntry } from "./types";
 
 /**
@@ -9,7 +9,8 @@ import type { Favorite, IntakeEntry } from "./types";
  * on Today and in History. Swap for API calls when the backend is ready.
  */
 
-const ENTRIES_KEY = "nutrion.entries";
+// v2: seed now includes a full month of history.
+const ENTRIES_KEY = "nutrion.entries.v2";
 const FAVORITES_KEY = "nutrion.favorites";
 
 function read<T>(key: string): T | null {
@@ -33,9 +34,7 @@ function write<T>(key: string, value: T): void {
 export function getEntries(): IntakeEntry[] {
   const stored = read<IntakeEntry[]>(ENTRIES_KEY);
   if (stored) return stored;
-  const seed = [...mockTodayEntries].sort((a, b) =>
-    a.loggedAt < b.loggedAt ? 1 : -1,
-  );
+  const seed = [...mockSeedEntries];
   write(ENTRIES_KEY, seed);
   return seed;
 }

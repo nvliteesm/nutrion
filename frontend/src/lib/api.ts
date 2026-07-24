@@ -31,3 +31,8 @@ export function getTodayTotals(): Promise<DailyTotals> {
   const todays = getEntries().filter(isToday);
   return delay(buildDailyTotals(MOCK_TODAY, todays, mockUser.targets));
 }
+
+/** All stored entries (for History / calendar / analytics). */
+export function getAllEntries(): Promise<IntakeEntry[]> {
+  return delay(getEntries());
+}
