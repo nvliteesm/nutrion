@@ -72,6 +72,7 @@ function adaptBackendIntake(r: BackendIntake): IntakeEntry {
     addedSugar_g: extras.added_sugar_g ?? 0,
     protein_g: r.nutrients.protein_g,
     fat_g: r.nutrients.fat_g,
+    sodium_mg: r.nutrients.sodium_mg ?? 0,
     caffeine_mg: extras.caffeine_mg,
   };
   return {
@@ -218,6 +219,37 @@ export async function confirmMedical(analysisId: string, metrics: unknown[], use
   return res.json();
 }
 
+/** Latest medical metrics from confirmed reports (Premium). */
+export interface BackendMedicalMetric {
+  id: number;
+  metric_name: string;
+  category: string;
+  value: number;
+  unit: string;
+  reference_min: number | null;
+  reference_max: number | null;
+  reference_range_text: string;
+  status: string;
+  test_date: string | null;
+  extraction_confidence: number;
+  confirmed: boolean;
+  created_at: string;
+}
+
+export async function fetchMedicalMetrics(
+  userId = "default",
+): Promise<BackendMedicalMetric[]> {
+  try {
+    const q = new URLSearchParams({ user_id: userId, limit: "50" });
+    const res = await fetch(`/api/medical/metrics?${q}`);
+    if (!res.ok) return [];
+    const rows = (await res.json()) as BackendMedicalMetric[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Log water volume (ml). Hold-to-fill commits full sips and partials on release. */
 export async function logWaterSip(ml = 30, userId = "default"): Promise<{ intake_id: number; ml: number }> {
   const res = await fetch("/api/water/sip", {
@@ -233,4 +265,22 @@ export async function deleteIntake(intakeId: number | string): Promise<void> {
   const id = String(intakeId).replace(/^be_/, "");
   const res = await fetch(`/intakes/${id}`, { method: "DELETE" });
   if (!res.ok) await apiError(res);
+}
+
+/** Upload recorded audio for Azure Speech transcription. */
+export async function transcribeAudio(
+  file: File,
+  userId = "default",
+): Promise<{ transcript: string; status?: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("user_id", userId);
+  let res: Response;
+  try {
+    res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
+  } catch {
+    throw new Error("Cannot reach the backend. Is uvicorn running on port 8000?");
+  }
+  if (!res.ok) await apiError(res);
+  return res.json();
 }

@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import {
-  CalendarIcon,
   CameraIcon,
   ChartIcon,
+  ChatIcon,
   HomeIcon,
   UserIcon,
 } from "@/components/icons";
@@ -20,7 +20,7 @@ import { LogEntrySheet } from "./LogEntrySheet";
  */
 const left = [
   { href: "/today", label: "Today", icon: HomeIcon },
-  { href: "/history", label: "History", icon: CalendarIcon },
+  { href: "/history", label: "AI Chat", icon: ChatIcon },
 ];
 const right = [{ href: "/insights", label: "Insights", icon: ChartIcon }];
 

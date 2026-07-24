@@ -24,6 +24,19 @@ async def lifespan(_app: FastAPI):
         logger.info("Approved health knowledge indexed: %s chunks", count)
     except Exception:  # noqa: BLE001
         logger.exception("Failed to index approved health knowledge")
+    try:
+        from app.db import SessionLocal
+        from app.services import vector_store
+
+        async with SessionLocal() as session:
+            meal_stats = await vector_store.ensure_indexed(session)
+        logger.info(
+            "Meal memory indexed: %s vectors (added %s)",
+            meal_stats.get("indexed"),
+            meal_stats.get("added"),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to backfill meal memory vectors")
     yield
 
 

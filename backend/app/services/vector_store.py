@@ -7,12 +7,28 @@ from typing import Any, Optional
 import chromadb
 from chromadb.api.models.Collection import Collection
 from chromadb.errors import InvalidDimensionException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.orm import Intake
 from app.models.schemas import ExtractedMeal
 from app.services.foundry import foundry
 
 COLLECTION_NAME = "meal_memory"
+# Water sips are too repetitive for semantic meal memory.
+INDEXABLE_KINDS = frozenset({"food", "drink", "document"})
+_EMBED_BATCH = 32
+
+
+def _intake_document(row: Intake) -> str:
+    return (
+        f"[{row.kind}] {row.name}. Serving {row.serving}. "
+        f"Calories {row.calories}, protein {row.protein_g}g, carbs {row.carbs_g}g, "
+        f"fat {row.fat_g}g, fiber {row.fiber_g}g, sugar {row.sugar_g}g, "
+        f"sodium {row.sodium_mg}mg. Source {row.source}. "
+        f"Raw: {(row.raw_text or '')[:500]}"
+    )
 
 
 class VectorStore:
@@ -123,6 +139,73 @@ class VectorStore:
     def count(self) -> int:
         return self._collection.count()
 
+    def existing_ids(self) -> set[str]:
+        return set(self._collection.get(include=[]).get("ids") or [])
+
+    async def _upsert_intake_batch(self, batch: list[Intake]) -> int:
+        if not batch:
+            return 0
+        docs = [_intake_document(r) for r in batch]
+        embeddings = await foundry.embed(docs)
+        if embeddings:
+            self._ensure_dims(embeddings[0])
+        ids = [f"intake-{r.id}" for r in batch]
+        metas = [
+            {
+                "user_id": r.user_id or "default",
+                "intake_id": r.id,
+                "source": r.source or "",
+                "kind": r.kind,
+                "name": (r.name or "")[:200],
+            }
+            for r in batch
+        ]
+        try:
+            self._collection.upsert(
+                ids=ids,
+                documents=docs,
+                embeddings=embeddings,
+                metadatas=metas,
+            )
+        except InvalidDimensionException:
+            self.reset_collection()
+            self._collection.upsert(
+                ids=ids,
+                documents=docs,
+                embeddings=embeddings,
+                metadatas=metas,
+            )
+        return len(batch)
+
+    async def ensure_indexed(self, session: AsyncSession) -> dict[str, int]:
+        """Backfill meal_memory from Postgres for any missing non-water intakes."""
+        result = await session.execute(
+            select(Intake)
+            .where(Intake.kind.in_(tuple(INDEXABLE_KINDS)))
+            .order_by(Intake.id)
+        )
+        rows = list(result.scalars().all())
+        existing = self.existing_ids()
+        missing = [r for r in rows if f"intake-{r.id}" not in existing]
+        if not missing:
+            return {"indexed": self.count(), "added": 0, "skipped_existing": len(rows)}
+
+        # Probe dims with the first doc so a stub→live mismatch resets once up front.
+        probe = (await foundry.embed([_intake_document(missing[0])]))[0]
+        self._ensure_dims(probe)
+        existing = self.existing_ids()
+        missing = [r for r in rows if f"intake-{r.id}" not in existing]
+
+        added = 0
+        for start in range(0, len(missing), _EMBED_BATCH):
+            added += await self._upsert_intake_batch(missing[start : start + _EMBED_BATCH])
+
+        return {
+            "indexed": self.count(),
+            "added": added,
+            "skipped_existing": len(rows) - len(missing),
+        }
+
 
 vector_store = VectorStore()
 
@@ -172,6 +255,11 @@ async def search(
         user_id=user_id or "default",
         top_k=limit,
     )
+
+
+async def ensure_indexed(session: AsyncSession) -> dict[str, int]:
+    """Module-level API used on app startup."""
+    return await vector_store.ensure_indexed(session)
 
 
 def health() -> dict[str, Any]:

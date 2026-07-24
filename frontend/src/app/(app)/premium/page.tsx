@@ -20,7 +20,7 @@ const FREE_FEATURES = [
   "Manual food, drink, and water logging",
   "Limited nutrition scans",
   "Daily dashboard + target tracking",
-  "Full history and calendar access",
+  "Daily dashboard + calendar",
   "Edit and delete previous entries",
   "Basic 7-day summaries",
   "Basic reminders",
@@ -120,7 +120,7 @@ export default function PremiumPage() {
       </Card>
 
       <p className="mt-6 text-center text-[11.5px] font-medium leading-relaxed text-ink-3">
-        History and calendar stay free, always. NutriON does not diagnose,
+        Today&apos;s calendar stays free, always. NutriON does not diagnose,
         prescribe treatment, or guarantee health improvement.
       </p>
     </div>

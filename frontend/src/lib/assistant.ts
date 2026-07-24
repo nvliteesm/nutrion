@@ -9,10 +9,89 @@ export interface AssistantBar {
   percent: number;
 }
 
+/** Interactive evidence cards derived from AnalyzeResponse.evidence. */
+export type AssistantCard =
+  | {
+      type: "summary";
+      title: string;
+      period?: string;
+      stats: { label: string; value: string; hint?: string }[];
+      mealCount: number;
+    }
+  | {
+      type: "sugar_sources";
+      title: string;
+      totalSugarG: number;
+      items: {
+        name: string;
+        sugarG: number;
+        percent: number;
+        inputType: string;
+        estimated: boolean;
+      }[];
+    }
+  | {
+      type: "trend";
+      title: string;
+      unit: string;
+      points: { label: string; value: number }[];
+      average?: number;
+      changePercent?: number | null;
+    }
+  | {
+      type: "comparison";
+      title: string;
+      currentLabel: string;
+      previousLabel: string;
+      rows: {
+        label: string;
+        current: number;
+        previous: number;
+        changePercent: number | null;
+        unit: string;
+      }[];
+    }
+  | {
+      type: "completeness";
+      title: string;
+      percent: number;
+      daysWithLogs: number;
+      expectedDays: number;
+      incompleteDays: string[];
+      note?: string;
+    }
+  | {
+      type: "medical";
+      title: string;
+      metrics: {
+        name: string;
+        value: number;
+        unit: string;
+        status: string;
+        range?: string;
+      }[];
+    }
+  | {
+      type: "knowledge";
+      title: string;
+      items: { title: string; topic: string; snippet: string }[];
+    }
+  | {
+      type: "sources";
+      title: string;
+      items: { kind: string; label: string; detail?: string }[];
+    }
+  | {
+      type: "actions";
+      title: string;
+      actions: { label: string; question: string }[];
+    };
+
 export interface AssistantMessage {
   role: "user" | "assistant";
   text: string;
   bars?: AssistantBar[];
+  cards?: AssistantCard[];
   /** Data-period badge text. */
   period?: string;
   /** Cautionary/limitation note. */
@@ -32,6 +111,13 @@ export function greetingMessage(): AssistantMessage {
   return {
     role: "assistant",
     text: "Hi! Ask me anything about your nutrition — I answer from your confirmed logs and approved health knowledge. I don't diagnose or prescribe.",
+    cards: [
+      {
+        type: "actions",
+        title: "Try asking",
+        actions: suggestedQuestions.map((q) => ({ label: q, question: q })),
+      },
+    ],
   };
 }
 
@@ -50,18 +136,23 @@ interface BackendAnalyzeResponse {
   medical_disclaimer?: string | null;
   incomplete_logging?: boolean;
   sources?: { kind: string; label: string; detail?: string }[];
+  tools_used?: string[];
+  evidence?: Record<string, unknown>;
 }
 
 /**
- * Call the real backend AI analyzer. Returns a formatted AssistantMessage.
- * Falls back to an error message if the backend is unreachable.
+ * Call the real backend AI analyzer. Returns a formatted AssistantMessage
+ * with interactive evidence cards when the backend provides structured data.
  */
-export async function askBackend(question: string): Promise<AssistantMessage> {
+export async function askBackend(
+  question: string,
+  userId = "default",
+): Promise<AssistantMessage> {
   try {
     const res = await fetch("/api/ai/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, user_id: "default" }),
+      body: JSON.stringify({ question, user_id: userId || "default" }),
     });
 
     if (!res.ok) {
@@ -86,11 +177,19 @@ export async function askBackend(question: string): Promise<AssistantMessage> {
         ? "Some days have incomplete logging, so totals may be underestimated."
         : undefined;
 
+    const cards = buildCardsFromEvidence({
+      evidence: data.evidence ?? {},
+      sources: data.sources ?? [],
+      period,
+      question,
+    });
+
     return {
       role: "assistant",
       text: data.answer,
       period,
       note,
+      cards,
     };
   } catch {
     return {
@@ -102,9 +201,289 @@ export async function askBackend(question: string): Promise<AssistantMessage> {
 
 function formatShortDate(iso: string): string {
   try {
-    const d = new Date(iso);
+    const d = new Date(iso + (iso.length === 10 ? "T12:00:00" : ""));
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   } catch {
     return iso;
   }
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
+}
+
+function asArray(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function num(v: unknown, fallback = 0): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+function str(v: unknown, fallback = ""): string {
+  return typeof v === "string" ? v : fallback;
+}
+
+function fmtNutrient(value: number, unit: string): string {
+  const rounded =
+    unit === "kcal" || unit === "mg"
+      ? Math.round(value)
+      : Math.round(value * 10) / 10;
+  return `${rounded}${unit ? ` ${unit}` : ""}`;
+}
+
+function dayLabel(iso: string): string {
+  try {
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
+  } catch {
+    return iso.slice(5);
+  }
+}
+
+function pickSummary(
+  evidence: Record<string, unknown>,
+): Record<string, unknown> | null {
+  return (
+    asRecord(evidence.weekly_summary) ||
+    asRecord(evidence.daily_summary) ||
+    asRecord(evidence.monthly_summary)
+  );
+}
+
+/** Map backend evidence into UI cards for the chat bubble. */
+export function buildCardsFromEvidence({
+  evidence,
+  sources,
+  period,
+  question,
+}: {
+  evidence: Record<string, unknown>;
+  sources: { kind: string; label: string; detail?: string }[];
+  period?: string;
+  question: string;
+}): AssistantCard[] {
+  const cards: AssistantCard[] = [];
+
+  const summary = pickSummary(evidence);
+  if (summary) {
+    const totals = asRecord(summary.totals) ?? {};
+    const stats = [
+      { label: "cal", value: fmtNutrient(num(totals.calories), "kcal") },
+      { label: "Sugar", value: fmtNutrient(num(totals.sugar_g), "g") },
+      { label: "Protein", value: fmtNutrient(num(totals.protein_g), "g") },
+      { label: "Carbs", value: fmtNutrient(num(totals.carbs_g), "g") },
+    ];
+    cards.push({
+      type: "summary",
+      title: "Period totals",
+      period,
+      stats,
+      mealCount: num(summary.meal_count),
+    });
+
+    // Daily sparkline from summary.daily when present.
+    const daily = asArray(summary.daily);
+    if (daily.length >= 2) {
+      const points = daily.map((row) => {
+        const r = asRecord(row) ?? {};
+        return {
+          label: dayLabel(str(r.day)),
+          value: num(r.sugar_g),
+        };
+      });
+      cards.push({
+        type: "trend",
+        title: "Daily sugar",
+        unit: "g",
+        points,
+        average:
+          points.reduce((s, p) => s + p.value, 0) / Math.max(points.length, 1),
+      });
+    }
+  }
+
+  const sugar = asRecord(evidence.top_sugar_sources);
+  if (sugar) {
+    const items = asArray(sugar.items)
+      .map((row) => {
+        const r = asRecord(row) ?? {};
+        return {
+          name: str(r.name, "Unknown"),
+          sugarG: num(r.sugar_g),
+          percent: num(r.percent_of_period_sugar),
+          inputType: str(r.input_type, "food"),
+          estimated: Boolean(r.is_estimated),
+        };
+      })
+      .filter((i) => i.name);
+    if (items.length) {
+      cards.push({
+        type: "sugar_sources",
+        title: "Top sugar sources",
+        totalSugarG: num(sugar.total_sugar_g),
+        items: items.slice(0, 6),
+      });
+    }
+  }
+
+  const trends = asRecord(evidence.nutrition_trends);
+  if (trends && !cards.some((c) => c.type === "trend")) {
+    const points = asArray(trends.points).map((row) => {
+      const r = asRecord(row) ?? {};
+      const metric = str(trends.metric, "sugar_g");
+      return {
+        label: dayLabel(str(r.day)),
+        value: num(r[metric] ?? r.sugar_g),
+      };
+    });
+    if (points.length) {
+      cards.push({
+        type: "trend",
+        title: "Nutrition trend",
+        unit: str(trends.metric, "sugar_g").endsWith("_g") ? "g" : "",
+        points,
+        average:
+          typeof trends.period_average === "number"
+            ? trends.period_average
+            : undefined,
+        changePercent:
+          trends.change_percent == null ? null : num(trends.change_percent),
+      });
+    }
+  }
+
+  const comparison = asRecord(evidence.period_comparison);
+  if (comparison) {
+    const current = asRecord(comparison.current) ?? {};
+    const previous = asRecord(comparison.previous) ?? {};
+    const change = asRecord(comparison.change_percents) ?? {};
+    const keys: { key: string; label: string; unit: string }[] = [
+      { key: "calories", label: "cal", unit: "kcal" },
+      { key: "sugar_g", label: "Sugar", unit: "g" },
+      { key: "protein_g", label: "Protein", unit: "g" },
+      { key: "carbs_g", label: "Carbs", unit: "g" },
+    ];
+    cards.push({
+      type: "comparison",
+      title: "Period comparison",
+      currentLabel: `${formatShortDate(str(comparison.current_start))} – ${formatShortDate(str(comparison.current_end))}`,
+      previousLabel: `${formatShortDate(str(comparison.previous_start))} – ${formatShortDate(str(comparison.previous_end))}`,
+      rows: keys.map(({ key, label, unit }) => ({
+        label,
+        current: num(current[key]),
+        previous: num(previous[key]),
+        changePercent:
+          change[key] == null ? null : num(change[key]),
+        unit,
+      })),
+    });
+  }
+
+  const completeness = asRecord(evidence.logging_completeness);
+  if (completeness) {
+    cards.push({
+      type: "completeness",
+      title: "Logging completeness",
+      percent: num(completeness.completeness_percent),
+      daysWithLogs: num(completeness.days_with_logs),
+      expectedDays: num(completeness.expected_days),
+      incompleteDays: asArray(completeness.incomplete_days).map((d) =>
+        str(d),
+      ),
+      note: str(completeness.note) || undefined,
+    });
+  }
+
+  const medical = asArray(evidence.medical_metrics);
+  if (medical.length) {
+    cards.push({
+      type: "medical",
+      title: "Confirmed labs",
+      metrics: medical.map((row) => {
+        const r = asRecord(row) ?? {};
+        const low = r.range_low ?? r.reference_min;
+        const high = r.range_high ?? r.reference_max;
+        const range =
+          low != null && high != null
+            ? `${num(low)}–${num(high)} ${str(r.unit)}`.trim()
+            : str(r.reference_range_text) || undefined;
+        return {
+          name: str(
+            r.metric_name || r.display_name || r.metric_key,
+            "Metric",
+          ),
+          value: num(r.value),
+          unit: str(r.unit),
+          status: str(r.status || r.flag, "unknown"),
+          range,
+        };
+      }),
+    });
+  }
+
+  const knowledge = asArray(evidence.knowledge_hits);
+  if (knowledge.length) {
+    cards.push({
+      type: "knowledge",
+      title: "From approved knowledge",
+      items: knowledge.slice(0, 3).map((row) => {
+        const r = asRecord(row) ?? {};
+        return {
+          title: str(r.title, "Article"),
+          topic: str(r.topic),
+          snippet: str(r.chunk).slice(0, 180),
+        };
+      }),
+    });
+  }
+
+  if (sources.length) {
+    cards.push({
+      type: "sources",
+      title: "Sources used",
+      items: sources.slice(0, 8).map((s) => ({
+        kind: s.kind,
+        label: s.label,
+        detail: s.detail,
+      })),
+    });
+  }
+
+  // Contextual follow-ups based on what evidence we have.
+  const actions: { label: string; question: string }[] = [];
+  if (cards.some((c) => c.type === "sugar_sources")) {
+    actions.push({
+      label: "Compare weeks",
+      question: "How did this week compare with last week?",
+    });
+  }
+  if (cards.some((c) => c.type === "completeness")) {
+    actions.push({
+      label: "Incomplete days?",
+      question: "Which days had incomplete logging and why does that matter?",
+    });
+  }
+  if (cards.some((c) => c.type === "medical")) {
+    actions.push({
+      label: "What is HbA1c?",
+      question: "What is HbA1c?",
+    });
+  }
+  if (actions.length === 0) {
+    const q = question.toLowerCase();
+    if (!q.includes("sugar")) {
+      actions.push({
+        label: "Sugar sources",
+        question: "Which drinks contributed most to my sugar?",
+      });
+    }
+  }
+  if (actions.length) {
+    cards.push({ type: "actions", title: "Dig deeper", actions: actions.slice(0, 3) });
+  }
+
+  return cards;
 }

@@ -20,9 +20,11 @@ export function linkedInsight(
   confirmedMetrics: MedicalMetric[],
   afternoonSweetDrinkDays: number,
 ): string | null {
-  const hba1c = confirmedMetrics.find((m) => m.id === "hba1c");
+  const hba1c = confirmedMetrics.find((m) =>
+    /hba1c|hb\s*a1c|a1c/i.test(m.name),
+  );
   if (hba1c && outOfRange(hba1c) && afternoonSweetDrinkDays >= 3) {
-    return "Your confirmed report shows an HbA1c above the printed reference range. Your recent logs also show frequent sweetened-drink consumption. Consider discussing this pattern with a healthcare professional.";
+    return "Your logs show frequent high-sugar drinks in the afternoon, and your uploaded report contains a confirmed HbA1c value outside its printed reference range. NutriON cannot determine whether one caused the other — consider discussing both with your doctor or dietitian.";
   }
   const anyOut = confirmedMetrics.some(outOfRange);
   if (anyOut) {

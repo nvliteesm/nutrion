@@ -69,10 +69,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     // Add user message + a loading placeholder.
     setMessages((m) => [...m, { role: "user", text: trimmed }, loadingMessage()]);
 
-    // Call the real backend AI.
-    askBackend(trimmed).then((answer) => {
+    const userId = getStoredSession()?.userId ?? "default";
+    askBackend(trimmed, userId).then((answer) => {
       setMessages((m) => {
-        // Replace the loading placeholder with the real answer.
         const withoutLoading = m.filter((msg) => !msg.loading);
         return [...withoutLoading, answer];
       });

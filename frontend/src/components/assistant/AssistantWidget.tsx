@@ -4,18 +4,21 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BulbIcon, ChatIcon, ExpandIcon, SendIcon, XIcon } from "@/components/icons";
+import { useToast } from "@/components/ui";
 import { suggestedQuestions } from "@/lib/assistant";
 import { useChat } from "./ChatProvider";
 import { MessageBubble } from "./MessageBubble";
+import { VoiceInputButton } from "./VoiceInputButton";
 
 /**
  * Floating chat launcher (bottom-right) with a compact popup.
- * Expanding routes to the full /assistant page; conversation state is shared
+ * Expanding routes to the full AI Chat page; conversation state is shared
  * via ChatProvider so it carries over seamlessly.
  */
 export function AssistantWidget() {
   const pathname = usePathname();
   const router = useRouter();
+  const { toast } = useToast();
   const { messages, ask, subscription, widgetOpen, setWidgetOpen } = useChat();
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -24,8 +27,8 @@ export function AssistantWidget() {
     if (widgetOpen) endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, widgetOpen]);
 
-  // Don't show the launcher on the full assistant page.
-  if (pathname === "/assistant") return null;
+  // Don't show the launcher on the full AI chat page.
+  if (pathname === "/history" || pathname === "/assistant") return null;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -35,7 +38,7 @@ export function AssistantWidget() {
 
   function expand() {
     setWidgetOpen(false);
-    router.push("/assistant");
+    router.push("/history");
   }
 
   const isPremium = subscription === "premium";
@@ -86,7 +89,7 @@ export function AssistantWidget() {
             <>
               <div className="flex flex-1 flex-col gap-3 overflow-y-auto bg-app-bg px-3.5 py-3.5">
                 {messages.map((m, i) => (
-                  <MessageBubble key={i} message={m} compact />
+                  <MessageBubble key={i} message={m} compact onAsk={ask} />
                 ))}
                 <div ref={endRef} />
               </div>
@@ -105,13 +108,24 @@ export function AssistantWidget() {
                 </div>
                 <form
                   onSubmit={handleSubmit}
-                  className="flex items-center gap-2 rounded-[12px] border border-line-2 px-3 py-2"
+                  className="flex items-center gap-1.5 rounded-[12px] border border-line-2 px-2.5 py-2"
                 >
+                  <VoiceInputButton
+                    compact
+                    onTranscript={(text) =>
+                      setInput((prev) =>
+                        prev.trim() ? `${prev.trim()} ${text}` : text,
+                      )
+                    }
+                    onError={(message) =>
+                      toast({ title: message, variant: "error" })
+                    }
+                  />
                   <input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Ask about your nutrition…"
-                    className="flex-1 bg-transparent text-[12.5px] font-medium text-ink placeholder:text-ink-3 focus:outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-ink placeholder:text-ink-3 focus:outline-none"
                   />
                   <button
                     type="submit"

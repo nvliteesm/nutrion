@@ -59,7 +59,7 @@ export function InsightsLocked() {
           Go Premium
         </Link>
         <div className="mt-3 text-[11.5px] font-medium text-white/55">
-          History &amp; calendar stay free, always.
+          Today&apos;s calendar stays free, always.
         </div>
       </div>
     </div>

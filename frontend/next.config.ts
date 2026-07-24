@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 // Backend base URL — override with BACKEND_URL in the environment for
 // staging/production. Defaults to the local FastAPI dev server.
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   async rewrites() {

@@ -1,5 +1,10 @@
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+import os
+
+# Chroma ships a buggy posthog client; disable before any chromadb import.
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+os.environ.setdefault("CHROMA_TELEMETRY", "False")
 
 from pydantic import computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -91,6 +96,15 @@ class Settings(BaseSettings):
     azure_openai_chat_deployment: str = "gpt-5-mini"
     azure_openai_embedding_deployment: str = "text-embedding-3-small"
 
+    # Azure Speech (Cognitive Services) — speech-to-text for chat mic
+    azure_speech_endpoint: str = ""
+    azure_speech_key: str = ""
+    azure_speech_locale: str = "en-US"
+    azure_speech_api_version: str = "2025-10-15"
+    # Back-compat aliases (older .env names)
+    azure_openai_speech_endpoint: str = ""
+    azure_openai_speech_key: str = ""
+
     # Account A — Content Understanding (OCR / docs)
     azure_content_endpoint: str = ""
     azure_content_api_key: str = ""
@@ -180,6 +194,29 @@ class Settings(BaseSettings):
     @property
     def kimi_vision_enabled(self) -> bool:
         return self.use_live_ai and self.has_kimi_key
+
+    @property
+    def speech_endpoint(self) -> str:
+        raw = (
+            self.azure_speech_endpoint
+            or self.azure_openai_speech_endpoint
+            or ""
+        ).strip()
+        if not raw:
+            return ""
+        return raw.rstrip("/")
+
+    @property
+    def speech_api_key(self) -> str:
+        return (
+            self.azure_speech_key.strip()
+            or self.azure_openai_speech_key.strip()
+            or self.azure_content_api_key.strip()
+        )
+
+    @property
+    def speech_configured(self) -> bool:
+        return bool(self.speech_endpoint and self.speech_api_key)
 
     @property
     def openai_api_key(self) -> str:

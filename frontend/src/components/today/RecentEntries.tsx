@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Card, SourceBadge } from "@/components/ui";
 import { CupIcon, DropletIcon, UtensilsIcon } from "@/components/icons";
 import { formatNumber, formatTime } from "@/lib/format";
@@ -32,9 +31,6 @@ export function RecentEntries({ entries }: { entries: IntakeEntry[] }) {
     <Card className="p-4 md:p-5">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[14px] font-bold text-ink">Recent entries</span>
-        <Link href="/history" className="text-[12.5px] font-semibold text-teal-d">
-          View all
-        </Link>
       </div>
 
       {visible.length === 0 ? (

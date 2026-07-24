@@ -57,12 +57,6 @@ class WaterSipResponse(BaseModel):
     ml: float
 
 
-def _bool_form(value: Optional[str], default: bool = True) -> bool:
-    if value is None or value.strip() == "" or value.strip().lower() == "string":
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
-
-
 async def _read_upload(file: Optional[UploadFile]) -> tuple[bytes | None, str | None]:
     if file is None or not file.filename:
         return None, None
@@ -133,87 +127,6 @@ async def health(session: AsyncSession = Depends(get_session)) -> HealthResponse
             },
         },
     )
-
-
-@router.post(
-    "/drink",
-    response_model=IngestResponse,
-    summary="Legacy: ingest drink label immediately",
-    tags=["ingestion"],
-)
-async def drink_endpoint(
-    file: UploadFile = File(..., description="Drink nutrition label photo"),
-    user_id: str = Form("default"),
-    persist: Optional[str] = Form("true"),
-    session: AsyncSession = Depends(get_session),
-) -> IngestResponse:
-    file_bytes, filename = await _read_upload(file)
-    try:
-        return await ingest.run_drink(
-            session,
-            file_bytes=file_bytes or b"",
-            filename=filename or "",
-            user_id=user_id or "default",
-            persist=_bool_form(persist, True),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Drink ingest failed: {exc}") from exc
-
-
-@router.post(
-    "/food",
-    response_model=IngestResponse,
-    summary="Legacy: ingest food photo immediately",
-    tags=["ingestion"],
-)
-async def food_endpoint(
-    file: UploadFile = File(..., description="Food / meal photo"),
-    user_id: str = Form("default"),
-    persist: Optional[str] = Form("true"),
-    session: AsyncSession = Depends(get_session),
-) -> IngestResponse:
-    file_bytes, filename = await _read_upload(file)
-    try:
-        return await ingest.run_food(
-            session,
-            file_bytes=file_bytes or b"",
-            filename=filename or "",
-            user_id=user_id or "default",
-            persist=_bool_form(persist, True),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Food ingest failed: {exc}") from exc
-
-
-@router.post(
-    "/document",
-    response_model=IngestResponse,
-    summary="Legacy: ingest document immediately",
-    tags=["ingestion"],
-)
-async def document_endpoint(
-    file: UploadFile = File(..., description="PDF or text nutrition document"),
-    user_id: str = Form("default"),
-    persist: Optional[str] = Form("true"),
-    session: AsyncSession = Depends(get_session),
-) -> IngestResponse:
-    file_bytes, filename = await _read_upload(file)
-    try:
-        return await ingest.run_document(
-            session,
-            file_bytes=file_bytes or b"",
-            filename=filename or "",
-            user_id=user_id or "default",
-            persist=_bool_form(persist, True),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Document ingest failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------

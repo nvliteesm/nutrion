@@ -13,6 +13,7 @@ const emptyNutrients = (): Nutrients => ({
   addedSugar_g: 0,
   protein_g: 0,
   fat_g: 0,
+  sodium_mg: 0,
   caffeine_mg: 0,
 });
 
@@ -25,9 +26,15 @@ export function sumNutrients(entries: IntakeEntry[]): Nutrients {
     acc.addedSugar_g += entry.nutrients.addedSugar_g;
     acc.protein_g += entry.nutrients.protein_g;
     acc.fat_g += entry.nutrients.fat_g;
+    acc.sodium_mg = (acc.sodium_mg ?? 0) + (entry.nutrients.sodium_mg ?? 0);
     acc.caffeine_mg = (acc.caffeine_mg ?? 0) + (entry.nutrients.caffeine_mg ?? 0);
     return acc;
   }, emptyNutrients());
+}
+
+/** Approximate salt (NaCl) grams from sodium milligrams. */
+export function saltFromSodiumMg(sodiumMg: number): number {
+  return (sodiumMg / 1000) * 2.5;
 }
 
 /** Count hydration millilitres from water entries. */

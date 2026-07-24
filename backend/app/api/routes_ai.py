@@ -5,15 +5,23 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models.schemas import AnalyzeRequest, AnalyzeResponse, InsightRecord
 from app.services import ai_analyzer, insights
 from app.services.foundry import FoundryError
+from app.services.speech import SpeechError, transcribe_audio
 
 router = APIRouter(prefix="/api/ai", tags=["ai-analyzer"])
+
+
+class TranscribeResponse(BaseModel):
+    transcript: str = ""
+    status: str = Field(default="ok", description="ok | not_configured")
+    detail: str = ""
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -35,6 +43,28 @@ async def analyze_endpoint(
         )
     except FoundryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe_endpoint(
+    file: UploadFile = File(..., description="Recorded audio (webm/m4a/wav)"),
+    user_id: str = Form("default"),
+) -> TranscribeResponse:
+    """Speech → text via Azure Speech Fast Transcription."""
+    _ = user_id
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty audio upload")
+    try:
+        transcript = await transcribe_audio(
+            file_bytes=raw,
+            filename=file.filename or "audio.webm",
+            content_type=file.content_type,
+        )
+    except SpeechError as exc:
+        status = 503 if "not configured" in str(exc).lower() else 502
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return TranscribeResponse(transcript=transcript, status="ok")
 
 
 @router.post("/insights/daily", response_model=InsightRecord)

@@ -166,8 +166,8 @@ export function ProfileSheet({
             />
           )}
           <SheetLink
-            href="/assistant"
-            label="AI nutrition assistant"
+            href="/history"
+            label="AI Chat"
             icon={<SparkleIcon size={18} />}
             onNavigate={onClose}
           />

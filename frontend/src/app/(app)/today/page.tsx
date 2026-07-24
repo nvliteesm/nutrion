@@ -95,7 +95,7 @@ export default function TodayPage() {
   }
 
   return (
-    <div className="flex animate-fade-up flex-col gap-3 md:gap-4">
+    <div className="flex flex-col gap-4 md:gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-extrabold tracking-tight text-ink md:text-[26px]">
@@ -127,7 +127,7 @@ export default function TodayPage() {
         </div>
       </header>
 
-      <div className="grid items-stretch gap-3 md:grid-cols-2 md:gap-4">
+      <div className="grid items-stretch gap-4 md:grid-cols-2 md:gap-5">
         <SugarCard
           sugar={totals.totalSugar_g}
           target={user.targets.sugar_g}
@@ -143,28 +143,24 @@ export default function TodayPage() {
 
       <QuickActions delay={0.15} />
 
-      <div className="grid items-stretch gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:gap-4">
-        <div className="min-w-0">
-          <MonthCalendar
-            monthLabel={monthLabel}
-            cells={grid}
-            selectedIso={selectedIso}
-            todayIso={todayIso}
-            onSelect={setSelectedIso}
-            onPrev={() => stepMonth(-1)}
-            onNext={() => stepMonth(1)}
-            delay={0.28}
-          />
-        </div>
-        <div className="min-w-0 md:h-full">
-          <DayDetail
-            dateIso={selectedIso}
-            entries={selectedEntries}
-            targets={user.targets}
-            onSelectEntry={setSelectedEntry}
-            delay={0.33}
-          />
-        </div>
+      <div className="grid items-start gap-4 md:grid-cols-2 md:gap-5">
+        <MonthCalendar
+          monthLabel={monthLabel}
+          cells={grid}
+          selectedIso={selectedIso}
+          todayIso={todayIso}
+          onSelect={setSelectedIso}
+          onPrev={() => stepMonth(-1)}
+          onNext={() => stepMonth(1)}
+          delay={0.28}
+        />
+        <DayDetail
+          dateIso={selectedIso}
+          entries={selectedEntries}
+          targets={user.targets}
+          onSelectEntry={setSelectedEntry}
+          delay={0.33}
+        />
       </div>
 
       {selectedEntry && (

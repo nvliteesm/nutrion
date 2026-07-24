@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 import {
-  CalendarIcon,
   ChartIcon,
+  ChatIcon,
   HomeIcon,
   UserIcon,
 } from "@/components/icons";
@@ -23,7 +23,7 @@ export interface NavItem {
 /** Primary navigation for the desktop side rail. */
 export const navItems: NavItem[] = [
   { href: "/today", label: "Today", icon: HomeIcon },
-  { href: "/history", label: "History", icon: CalendarIcon },
+  { href: "/history", label: "AI Chat", icon: ChatIcon, pro: true },
   { href: "/insights", label: "Insights", icon: ChartIcon, pro: true },
   { href: "/profile", label: "Profile", icon: UserIcon, sheet: "profile" },
 ];

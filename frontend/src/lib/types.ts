@@ -39,6 +39,8 @@ export interface Nutrients {
   addedSugar_g: number;
   protein_g: number;
   fat_g: number;
+  /** Milligrams of sodium from labels / AI estimates. */
+  sodium_mg?: number;
   /** Drinks only. Milligrams is correct for caffeine (sugar stays in grams). */
   caffeine_mg?: number;
 }

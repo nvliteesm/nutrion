@@ -125,7 +125,7 @@ export default function ProfilePage() {
         {isPremium && (
           <ProfileLink href="/scan/medical" label="Medical reports" icon={<FileTextIcon size={18} />} />
         )}
-        <ProfileLink href="/assistant" label="AI nutrition assistant" icon={<SparkleIcon size={18} />} />
+        <ProfileLink href="/history" label="AI Chat" icon={<SparkleIcon size={18} />} />
         <ProfileLink href="/admin" label="Admin portal" icon={<ChartIcon size={18} />} />
       </Card>
 
