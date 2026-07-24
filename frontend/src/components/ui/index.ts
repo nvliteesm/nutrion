@@ -1,5 +1,6 @@
 export { Card } from "./Card";
 export { Button } from "./Button";
+export { Input } from "./Input";
 export { Badge, type BadgeTone } from "./Badge";
 export { StatusPill } from "./StatusPill";
 export { ConfidenceBadge } from "./ConfidenceBadge";
