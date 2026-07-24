@@ -102,6 +102,23 @@ export interface ExtractedDrink {
   lowConfidenceFields: string[];
 }
 
+/** A single food item detected in a photo (per-serving estimate). */
+export interface DetectedFoodItem {
+  id: string;
+  name: string;
+  /** Portion unit label, e.g. "cup" or "120 g". */
+  unit: string;
+  /** Number of servings the user has dialled in. */
+  servings: number;
+  perServingRange: [number, number];
+  perServingNutrients: Nutrients;
+}
+
+export interface FoodAnalysis {
+  items: DetectedFoodItem[];
+  confidence: Confidence;
+}
+
 /** A saved meal/drink the user can re-log quickly. */
 export interface Favorite {
   id: string;
