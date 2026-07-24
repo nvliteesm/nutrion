@@ -12,6 +12,8 @@ import {
   confirmMedical,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { CameraCapture } from "@/components/scan/CameraCapture";
+import { CameraIcon } from "@/components/icons";
 import type {
   Confidence,
   DrinkLabelData,
@@ -137,6 +139,7 @@ export default function ScanPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const [drink, setDrink] = useState<DrinkLabelData | null>(null);
   const [food, setFood] = useState<FoodAnalysisData | null>(null);
@@ -170,9 +173,8 @@ export default function ScanPage() {
     setError(null);
   }
 
-  async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !mode) return;
+  async function runAnalyze(file: File) {
+    if (!mode) return;
 
     setBusy(true);
     setError(null);
@@ -203,6 +205,16 @@ export default function ScanPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) void runAnalyze(file);
+  }
+
+  function handleCameraCapture(file: File) {
+    setCameraOpen(false);
+    void runAnalyze(file);
   }
 
   async function onConfirm() {
@@ -322,9 +334,19 @@ export default function ScanPage() {
             fullWidth
             size="lg"
             disabled={busy}
+            onClick={() => setCameraOpen(true)}
+          >
+            <CameraIcon size={18} />
+            {busy ? "Analyzing…" : "Take photo"}
+          </Button>
+          <Button
+            variant="outline"
+            fullWidth
+            size="lg"
+            disabled={busy}
             onClick={() => fileRef.current?.click()}
           >
-            {busy ? "Analyzing…" : "Choose file"}
+            Choose file
           </Button>
           <Button variant="ghost" fullWidth disabled={busy} onClick={resetAll}>
             Back
@@ -661,6 +683,14 @@ export default function ScanPage() {
             </Button>
           </div>
         </div>
+      )}
+
+      {cameraOpen && activeMode && (
+        <CameraCapture
+          title={activeMode.title}
+          onCapture={handleCameraCapture}
+          onClose={() => setCameraOpen(false)}
+        />
       )}
 
       {step === "done" && (
