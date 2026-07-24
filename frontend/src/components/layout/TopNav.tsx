@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { navItems } from "@/lib/nav";
 import { getStoredSession, type Session } from "@/lib/auth";
-import { mockUser } from "@/lib/mock-data";
 import { FlameIcon, PlusIcon } from "@/components/icons";
 import { Logo } from "./Logo";
 import { NotificationBell } from "./NotificationPanel";
@@ -20,8 +19,8 @@ export function TopNav() {
     setSession(getStoredSession());
   }, []);
 
-  const initials = session?.initials ?? mockUser.initials;
-  const streakDays = mockUser.streakDays; // TODO: compute from entries
+  const initials = session?.initials ?? "U";
+  const streakDays = 0; // TODO: compute from backend entries
 
   return (
     <header className="sticky top-0 z-30 hidden h-[62px] items-center justify-between bg-navy px-6 text-white md:flex">

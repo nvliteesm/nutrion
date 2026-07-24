@@ -10,7 +10,7 @@ import {
 import { getAllEntries } from "@/lib/api";
 import { getStoredSession } from "@/lib/auth";
 import { getToday } from "@/lib/date";
-import { mockUser } from "@/lib/mock-data";
+import { DEFAULT_TARGETS } from "@/lib/types";
 import {
   answerQuestion,
   greetingMessage,
@@ -69,7 +69,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     (question: string) => {
       const trimmed = question.trim();
       if (!trimmed) return;
-      const answer = answerQuestion(trimmed, entries, mockUser.targets, getToday());
+      const answer = answerQuestion(trimmed, entries, DEFAULT_TARGETS, getToday());
       setMessages((m) => [...m, { role: "user", text: trimmed }, answer]);
     },
     [entries],

@@ -75,6 +75,13 @@ export interface NutritionTargets {
 
 export type GoalSource = "user" | "nutrion";
 
+/** Default targets for new users (before they customize). */
+export const DEFAULT_TARGETS: NutritionTargets = {
+  calories: 2000,
+  addedSugar_g: 40,
+  water_cups: 8,
+};
+
 export interface UserProfile {
   id: string;
   fullName: string;

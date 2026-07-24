@@ -8,7 +8,7 @@ import { getStoredSession } from "@/lib/auth";
 import { saveMedicalMetrics } from "@/lib/store";
 import { computeInsights } from "@/lib/analytics";
 import { linkedInsight } from "@/lib/medical";
-import { mockUser } from "@/lib/mock-data";
+import { DEFAULT_TARGETS } from "@/lib/types";
 import { getToday } from "@/lib/date";
 import type { IntakeEntry, MedicalMetric, Subscription } from "@/lib/types";
 import { MedicalUploadStep } from "@/components/scan/medical/MedicalUploadStep";
@@ -29,7 +29,7 @@ export default function ScanMedicalPage() {
   }, []);
 
   const afternoonDays = useMemo(
-    () => computeInsights(entries, mockUser.targets, getToday(), 7).afternoonPattern.count,
+    () => computeInsights(entries, DEFAULT_TARGETS, getToday(), 7).afternoonPattern.count,
     [entries],
   );
 

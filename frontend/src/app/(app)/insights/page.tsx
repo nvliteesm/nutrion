@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getAllEntries } from "@/lib/api";
 import { getStoredSession } from "@/lib/auth";
 import { getToday } from "@/lib/date";
-import { mockUser } from "@/lib/mock-data";
+import { DEFAULT_TARGETS } from "@/lib/types";
 import { Skeleton } from "@/components/ui";
 import type { IntakeEntry, Subscription } from "@/lib/types";
 import { InsightsLocked } from "@/components/insights/InsightsLocked";
@@ -34,7 +34,7 @@ export default function InsightsPage() {
   return (
     <InsightsPremium
       entries={entries}
-      targets={mockUser.targets}
+      targets={DEFAULT_TARGETS}
       endIso={getToday()}
     />
   );

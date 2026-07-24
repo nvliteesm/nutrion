@@ -4,7 +4,7 @@ import { useState } from "react";
 import { addEntry, getEntries } from "@/lib/store";
 import { buildDailyTotals } from "@/lib/nutrition";
 import { getToday } from "@/lib/date";
-import { mockUser } from "@/lib/mock-data";
+import { DEFAULT_TARGETS } from "@/lib/types";
 import type { ExtractedDrink, IntakeEntry } from "@/lib/types";
 import { CaptureStep } from "@/components/scan/drink/CaptureStep";
 import { ProcessingStep } from "@/components/scan/drink/ProcessingStep";
@@ -27,11 +27,11 @@ export default function ScanDrinkPage() {
     const todays = getEntries().filter(
       (e) => e.loggedAt.slice(0, 10) === today,
     );
-    const totals = buildDailyTotals(today, todays, mockUser.targets);
+    const totals = buildDailyTotals(today, todays, DEFAULT_TARGETS);
     setSummary({
       productName: entry.name,
       addedSugarTotal: totals.addedSugar_g,
-      addedSugarTarget: mockUser.targets.addedSugar_g,
+      addedSugarTarget: DEFAULT_TARGETS.addedSugar_g,
     });
     setStep("saved");
   }

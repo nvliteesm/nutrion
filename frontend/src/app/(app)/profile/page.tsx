@@ -13,14 +13,14 @@ import {
 } from "@/components/icons";
 import { clearSession, getStoredSession, type Session } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import { DEFAULT_TARGETS } from "@/lib/types";
 import type { NutritionTargets } from "@/lib/types";
-import { mockUser } from "@/lib/mock-data";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 export default function ProfilePage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const [targets, setTargets] = useState<NutritionTargets>(mockUser.targets);
+  const [targets, setTargets] = useState<NutritionTargets>(DEFAULT_TARGETS);
 
   useEffect(() => {
     setSession(getStoredSession());

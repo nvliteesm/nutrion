@@ -1,16 +1,13 @@
-import { mockSeedEntries } from "./mock-data";
 import type { Favorite, IntakeEntry, MedicalMetric } from "./types";
 
 /**
  * Client-side data store (localStorage-backed).
  *
- * Seeds from the mock day on first use so the dashboard has content, then
- * lets the scan and manual flows append real entries that immediately show up
- * on Today and in History. Swap for API calls when the backend is ready.
+ * Stores local manual entries and favorites. Backend-confirmed entries come
+ * from /intakes via api.ts and are merged at read time.
  */
 
-// v3: seeds use real today instead of hardcoded date.
-const ENTRIES_KEY = "nutrion.entries.v3";
+const ENTRIES_KEY = "nutrion.entries.v4";
 const FAVORITES_KEY = "nutrion.favorites";
 const METRICS_KEY = "nutrion.metrics";
 
@@ -31,13 +28,9 @@ function write<T>(key: string, value: T): void {
   }
 }
 
-/** All entries, newest first. Seeds from mock data on first read. */
+/** All local entries (manual/quick log), newest first. */
 export function getEntries(): IntakeEntry[] {
-  const stored = read<IntakeEntry[]>(ENTRIES_KEY);
-  if (stored) return stored;
-  const seed = [...mockSeedEntries];
-  write(ENTRIES_KEY, seed);
-  return seed;
+  return read<IntakeEntry[]>(ENTRIES_KEY) ?? [];
 }
 
 function genId(): string {

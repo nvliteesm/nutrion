@@ -5,7 +5,7 @@ import { getAllEntries } from "@/lib/api";
 import { deleteEntry, restoreEntry, updateEntry } from "@/lib/store";
 import { Skeleton, useToast } from "@/components/ui";
 import { getToday } from "@/lib/date";
-import { mockUser } from "@/lib/mock-data";
+import { DEFAULT_TARGETS } from "@/lib/types";
 import {
   buildMonthGrid,
   groupByDate,
@@ -17,7 +17,7 @@ import { MonthCalendar } from "@/components/history/MonthCalendar";
 import { DayDetail } from "@/components/history/DayDetail";
 import { EditEntryDialog } from "@/components/history/EditEntryDialog";
 
-const targets = mockUser.targets;
+const targets = DEFAULT_TARGETS;
 
 export default function HistoryPage() {
   const [entries, setEntries] = useState<IntakeEntry[] | null>(null);

@@ -13,13 +13,14 @@ import { getAllEntries } from "@/lib/api";
 import { getStoredSession } from "@/lib/auth";
 import { formatNumber } from "@/lib/format";
 import { getToday } from "@/lib/date";
-import { mockUser } from "@/lib/mock-data";
+import { DEFAULT_TARGETS } from "@/lib/types";
 import { generateReport, type PersonalReport } from "@/lib/report";
 import type { IntakeEntry, Subscription } from "@/lib/types";
 
 const PERIODS = [7, 30, 90] as const;
 
 export default function ReportPage() {
+  const session = getStoredSession();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [entries, setEntries] = useState<IntakeEntry[]>([]);
   const [period, setPeriod] = useState<number>(30);
@@ -32,7 +33,7 @@ export default function ReportPage() {
   const report: PersonalReport | null = useMemo(
     () =>
       entries.length
-        ? generateReport(mockUser.fullName, entries, mockUser.targets, getToday(), period)
+        ? generateReport(session?.fullName ?? "User", entries, DEFAULT_TARGETS, getToday(), period)
         : null,
     [entries, period],
   );

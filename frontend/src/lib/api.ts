@@ -1,4 +1,3 @@
-import { mockUser } from "./mock-data";
 import { getToday, localDayKey } from "./date";
 import { getEntries } from "./store";
 import { buildDailyTotals } from "./nutrition";
@@ -17,25 +16,18 @@ import type {
   Nutrients,
   UserProfile,
 } from "./types";
+import { DEFAULT_TARGETS } from "./types";
 import { getStoredSession } from "./auth";
 
 /**
- * API layer.
- *
- * Reads merge two sources so the whole app shows a single unified history:
- *   1. Backend intakes (Supabase, via the real scan/confirm flow) — source of truth.
- *   2. Local entries (localStorage) — manual/quick logging + demo seed.
- *
- * If the backend is unreachable the app gracefully falls back to local data,
- * so offline dev still works.
+ * API layer — all data from the backend (Supabase) + local manual entries.
+ * No hardcoded/mock data.
  */
 
-const targets = mockUser.targets;
-
-/** Shape of a backend IntakeRecord (see backend schemas.IntakeRecord). */
+/** Shape of a backend IntakeRecord. */
 interface BackendIntake {
   id: number;
-  kind: string; // food | drink
+  kind: string;
   name: string;
   serving?: string;
   logged_at: string;
@@ -68,7 +60,6 @@ function mapConfidence(score: number): Confidence {
   return "low";
 }
 
-/** Adapt a backend intake row to the frontend IntakeEntry model. */
 function adaptBackendIntake(r: BackendIntake): IntakeEntry {
   const extras = r.nutrients.extras ?? {};
   const type: EntryType = r.kind === "drink" ? "drink" : "food";
@@ -104,7 +95,6 @@ async function fetchBackendEntries(): Promise<IntakeEntry[]> {
     if (!Array.isArray(rows)) return [];
     return rows.map(adaptBackendIntake);
   } catch {
-    // Backend offline — fall back to local-only.
     return [];
   }
 }
@@ -120,20 +110,19 @@ function mergeEntries(
 
 export function getCurrentUser(): Promise<UserProfile> {
   const session = getStoredSession();
-  if (session) {
-    return Promise.resolve({
-      ...mockUser,
-      id: session.userId,
-      fullName: session.fullName,
-      email: session.email,
-      initials: session.initials,
-      subscription: session.subscription,
-    });
-  }
-  return Promise.resolve(mockUser);
+  const profile: UserProfile = {
+    id: session?.userId ?? "guest",
+    fullName: session?.fullName ?? "User",
+    email: session?.email ?? "",
+    initials: session?.initials ?? "U",
+    subscription: session?.subscription ?? "free",
+    targets: DEFAULT_TARGETS,
+    goalSource: "user",
+    streakDays: 0,
+  };
+  return Promise.resolve(profile);
 }
 
-/** All entries (backend + local), newest first. */
 export async function getAllEntries(): Promise<IntakeEntry[]> {
   const backend = await fetchBackendEntries();
   return mergeEntries(backend, getEntries());
@@ -149,11 +138,11 @@ export async function getTodayTotals(): Promise<DailyTotals> {
   const today = getToday();
   const all = await getAllEntries();
   const todays = all.filter((e) => localDayKey(e.loggedAt) === today);
-  return buildDailyTotals(today, todays, targets);
+  return buildDailyTotals(today, todays, DEFAULT_TARGETS);
 }
 
 // ---------------------------------------------------------------------------
-// Analyze → confirm flow (backend). Used by the /scan hub.
+// Analyze → confirm flow (backend)
 // ---------------------------------------------------------------------------
 
 async function apiError(res: Response): Promise<never> {
@@ -165,17 +154,13 @@ async function apiError(res: Response): Promise<never> {
     detail = res.statusText;
   }
   if (typeof detail !== "string") detail = JSON.stringify(detail);
-  // Make the error human-readable instead of raw "Internal Server Error".
   if (res.status === 500 && detail === "Internal Server Error") {
-    detail = "The backend encountered an error processing your request. Try again or use a different image.";
+    detail = "The backend encountered an error. Try again or use a different image.";
   }
   throw new Error(detail);
 }
 
-export async function analyzeDrink(
-  file: File,
-  userId = "default",
-): Promise<DrinkAnalyzeResponse> {
+export async function analyzeDrink(file: File, userId = "default"): Promise<DrinkAnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId);
@@ -184,11 +169,7 @@ export async function analyzeDrink(
   return res.json();
 }
 
-export async function confirmDrink(
-  analysisId: string,
-  drink: unknown,
-  userId = "default",
-): Promise<DrinkConfirmResponse> {
+export async function confirmDrink(analysisId: string, drink: unknown, userId = "default"): Promise<DrinkConfirmResponse> {
   const res = await fetch(`/api/drinks/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -198,10 +179,7 @@ export async function confirmDrink(
   return res.json();
 }
 
-export async function analyzeFood(
-  file: File,
-  userId = "default",
-): Promise<FoodAnalyzeResponse> {
+export async function analyzeFood(file: File, userId = "default"): Promise<FoodAnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId);
@@ -210,12 +188,7 @@ export async function analyzeFood(
   return res.json();
 }
 
-export async function confirmFood(
-  analysisId: string,
-  food: unknown,
-  userId = "default",
-  name?: string,
-): Promise<FoodConfirmResponse> {
+export async function confirmFood(analysisId: string, food: unknown, userId = "default", name?: string): Promise<FoodConfirmResponse> {
   const res = await fetch(`/api/foods/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -225,10 +198,7 @@ export async function confirmFood(
   return res.json();
 }
 
-export async function analyzeMedical(
-  file: File,
-  userId = "default",
-): Promise<MedicalAnalyzeResponse> {
+export async function analyzeMedical(file: File, userId = "default"): Promise<MedicalAnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId);
@@ -237,11 +207,7 @@ export async function analyzeMedical(
   return res.json();
 }
 
-export async function confirmMedical(
-  analysisId: string,
-  metrics: unknown[],
-  userId = "default",
-): Promise<MedicalConfirmResponse> {
+export async function confirmMedical(analysisId: string, metrics: unknown[], userId = "default"): Promise<MedicalConfirmResponse> {
   const res = await fetch(`/api/medical/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
