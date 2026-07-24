@@ -6,6 +6,7 @@ import { Badge, Button, Card } from "@/components/ui";
 import { Field } from "@/components/auth/Field";
 import {
   CheckIcon,
+  ChartIcon,
   ChevronRightIcon,
   FileTextIcon,
   SparkleIcon,
@@ -124,6 +125,7 @@ export default function ProfilePage() {
           <ProfileLink href="/scan/medical" label="Medical reports" icon={<FileTextIcon size={18} />} />
         )}
         <ProfileLink href="/assistant" label="AI nutrition assistant" icon={<SparkleIcon size={18} />} />
+        <ProfileLink href="/admin" label="Admin portal" icon={<ChartIcon size={18} />} />
       </Card>
 
       {/* Danger zone */}

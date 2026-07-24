@@ -7,6 +7,7 @@ import { navItems } from "@/lib/nav";
 import { mockUser } from "@/lib/mock-data";
 import { FlameIcon, PlusIcon } from "@/components/icons";
 import { Logo } from "./Logo";
+import { NotificationBell } from "./NotificationPanel";
 
 /** Desktop horizontal navbar (hidden on mobile — the bottom bar takes over). */
 export function TopNav() {
@@ -59,6 +60,7 @@ export function TopNav() {
           <PlusIcon size={14} />
           Log entry
         </Link>
+        <NotificationBell />
         <span className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] bg-white/[0.14] text-[13px] font-bold text-white">
           {mockUser.initials}
         </span>
