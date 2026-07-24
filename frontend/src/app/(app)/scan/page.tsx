@@ -201,7 +201,8 @@ export default function ScanPage() {
       }
       setStep("review");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Analyze failed");
+      const msg = err instanceof Error ? err.message : "Analyze failed";
+      setError(`${activeMode?.title ?? "Scan"}: ${msg}`);
     } finally {
       setBusy(false);
     }
@@ -234,7 +235,7 @@ export default function ScanPage() {
       }
       setStep("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Confirm failed");
+      setError(err instanceof Error ? err.message : "Confirm failed. Try again.");
     } finally {
       setBusy(false);
     }
@@ -293,8 +294,15 @@ export default function ScanPage() {
       </header>
 
       {error && (
-        <div className="rounded-card-sm border border-red/20 bg-red-t px-4 py-3 text-sm text-red-d">
-          {error}
+        <div className="flex items-center justify-between rounded-card-sm border border-red/20 bg-red-t px-4 py-3 text-sm text-red-d">
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="ml-3 shrink-0 text-red-d/60 hover:text-red-d"
+            aria-label="Dismiss error"
+          >
+            ✕
+          </button>
         </div>
       )}
 

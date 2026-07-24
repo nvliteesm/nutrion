@@ -157,14 +157,19 @@ export async function getTodayTotals(): Promise<DailyTotals> {
 // ---------------------------------------------------------------------------
 
 async function apiError(res: Response): Promise<never> {
-  let detail = res.statusText;
+  let detail: string;
   try {
     const body = await res.json();
-    detail = body.detail || body.message || detail;
+    detail = body.detail || body.message || body.error || res.statusText;
   } catch {
-    /* ignore */
+    detail = res.statusText;
   }
-  throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  if (typeof detail !== "string") detail = JSON.stringify(detail);
+  // Make the error human-readable instead of raw "Internal Server Error".
+  if (res.status === 500 && detail === "Internal Server Error") {
+    detail = "The backend encountered an error processing your request. Try again or use a different image.";
+  }
+  throw new Error(detail);
 }
 
 export async function analyzeDrink(
