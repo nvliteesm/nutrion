@@ -2,50 +2,29 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Card, Badge, ProgressBar, Button } from "@/components/ui";
-import { AlertTriangleIcon, BulbIcon, SendIcon } from "@/components/icons";
-import { getAllEntries } from "@/lib/api";
-import { getStoredSession } from "@/lib/auth";
-import { mockUser, MOCK_TODAY } from "@/lib/mock-data";
-import {
-  answerQuestion,
-  greetingMessage,
-  suggestedQuestions,
-  type AssistantMessage,
-} from "@/lib/assistant";
-import type { IntakeEntry, Subscription } from "@/lib/types";
+import { Card, Button, Skeleton } from "@/components/ui";
+import { BulbIcon, SendIcon } from "@/components/icons";
+import { suggestedQuestions } from "@/lib/assistant";
+import { useChat } from "@/components/assistant/ChatProvider";
+import { MessageBubble } from "@/components/assistant/MessageBubble";
 
 export default function AssistantPage() {
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [entries, setEntries] = useState<IntakeEntry[]>([]);
-  const [messages, setMessages] = useState<AssistantMessage[]>([greetingMessage()]);
+  const { messages, ask, subscription } = useChat();
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setSubscription(getStoredSession()?.subscription ?? "free");
-    getAllEntries().then(setEntries);
-  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  function ask(question: string) {
-    const trimmed = question.trim();
-    if (!trimmed) return;
-    const answer = answerQuestion(trimmed, entries, mockUser.targets, MOCK_TODAY);
-    setMessages((m) => [...m, { role: "user", text: trimmed }, answer]);
-    setInput("");
-  }
-
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     ask(input);
+    setInput("");
   }
 
   if (subscription === null) {
-    return <div className="h-40 animate-pulse rounded-card-lg bg-black/[0.05]" />;
+    return <Skeleton className="h-40" />;
   }
 
   if (subscription !== "premium") {
@@ -89,7 +68,7 @@ export default function AssistantPage() {
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-line bg-white px-4 pb-4 pt-3">
+      <div className="border-t border-line bg-card px-4 pb-4 pt-3">
         <div className="mb-2.5 flex flex-wrap gap-2">
           {suggestedQuestions.map((q) => (
             <button
@@ -120,51 +99,6 @@ export default function AssistantPage() {
           </button>
         </form>
       </div>
-    </div>
-  );
-}
-
-function MessageBubble({ message }: { message: AssistantMessage }) {
-  if (message.role === "user") {
-    return (
-      <div className="max-w-[80%] self-end rounded-[16px] rounded-br-[4px] bg-navy px-4 py-3 text-[13.5px] font-medium leading-relaxed text-white">
-        {message.text}
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-[86%] self-start rounded-[16px] rounded-bl-[4px] bg-card p-4 shadow-card ring-1 ring-line">
-      <p className="text-[13.5px] font-medium leading-relaxed text-ink">
-        {message.text}
-      </p>
-
-      {message.bars && message.bars.length > 0 && (
-        <div className="mt-2.5 flex flex-col gap-2">
-          {message.bars.map((bar) => (
-            <div key={bar.label}>
-              <div className="mb-1 flex justify-between text-[12px] font-semibold text-ink-2">
-                <span>{bar.label}</span>
-                <span>{bar.percent}%</span>
-              </div>
-              <ProgressBar value={bar.percent} max={100} height={6} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {message.period && (
-        <div className="mt-2.5">
-          <Badge tone="teal">{message.period}</Badge>
-        </div>
-      )}
-
-      {message.note && (
-        <div className="mt-2 flex items-start gap-2 text-[11.5px] font-medium leading-relaxed text-ink-2">
-          <AlertTriangleIcon size={14} className="mt-px shrink-0 text-amber-d" />
-          {message.note}
-        </div>
-      )}
     </div>
   );
 }

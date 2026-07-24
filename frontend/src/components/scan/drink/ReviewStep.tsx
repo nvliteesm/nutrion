@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Card, Button, ConfidenceBadge, SourceBadge } from "@/components/ui";
 import { AlertTriangleIcon } from "@/components/icons";
 import { formatNumber } from "@/lib/format";
-import { MOCK_TODAY } from "@/lib/mock-data";
+import { getToday } from "@/lib/date";
+import { parseNonNegative } from "@/lib/nutrition";
 import type { ExtractedDrink, IntakeEntry } from "@/lib/types";
 
 type ConsumedMode = "whole" | "half" | "custom";
@@ -12,7 +13,7 @@ type ConsumedMode = "whole" | "half" | "custom";
 function nowOnToday(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${MOCK_TODAY}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  return `${getToday()}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 }
 
 export function ReviewStep({
@@ -152,8 +153,9 @@ export function ReviewStep({
                 </span>
                 <input
                   type="number"
+                  min={0}
                   value={customMl}
-                  onChange={(e) => setCustomMl(Number(e.target.value) || 0)}
+                  onChange={(e) => setCustomMl(parseNonNegative(e.target.value))}
                   className="w-24 bg-transparent text-right text-[13.5px] font-bold text-ink focus:outline-none"
                 />
               </label>
@@ -222,8 +224,9 @@ function EditableStat({
       <div className="mt-0.5 flex items-baseline gap-1">
         <input
           type="number"
+          min={0}
           value={value}
-          onChange={(e) => onChange(Number(e.target.value) || 0)}
+          onChange={(e) => onChange(parseNonNegative(e.target.value))}
           className="w-full min-w-0 bg-transparent text-[15px] font-bold text-ink focus:outline-none"
         />
         {suffix && (

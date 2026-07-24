@@ -1,14 +1,16 @@
 import type { NextConfig } from "next";
 
-const backend =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://127.0.0.1:8000";
-
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: `${backend}/api/:path*`,
+        destination: "http://localhost:8000/api/:path*",
+      },
+      // Legacy endpoints without /api prefix
+      {
+        source: "/health",
+        destination: "http://localhost:8000/health",
       },
     ];
   },

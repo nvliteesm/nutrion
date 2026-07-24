@@ -1,4 +1,16 @@
-import { MOCK_TODAY } from "./mock-data";
+import { getToday } from "./date";
+
+function yesterday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function daysAgoStr(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export type NotifKind =
   | "meal_reminder"
@@ -38,7 +50,7 @@ function write(notifs: AppNotification[]): void {
 }
 
 function seedNotifications(): AppNotification[] {
-  const today = MOCK_TODAY;
+  const today = getToday();
   return [
     {
       id: "n1",
@@ -69,7 +81,7 @@ function seedNotifications(): AppNotification[] {
       title: "Yesterday's summary",
       body: "You stayed within target yesterday — 1,870 kcal, 36 g added sugar. Nice one.",
       kind: "daily_summary",
-      createdAt: `2026-07-23T21:00:00`,
+      createdAt: `${yesterday()}T21:00:00`,
       read: true,
     },
     {
@@ -77,7 +89,7 @@ function seedNotifications(): AppNotification[] {
       title: "Weekly summary",
       body: "Last week: avg 1,817 kcal/day, 31 g added sugar, 5 of 7 days within target.",
       kind: "weekly_summary",
-      createdAt: `2026-07-21T09:00:00`,
+      createdAt: `${daysAgoStr(3)}T09:00:00`,
       read: true,
     },
   ];

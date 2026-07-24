@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { navItems } from "@/lib/nav";
+import { getStoredSession, type Session } from "@/lib/auth";
 import { mockUser } from "@/lib/mock-data";
 import { FlameIcon, PlusIcon } from "@/components/icons";
 import { Logo } from "./Logo";
@@ -12,6 +14,14 @@ import { NotificationBell } from "./NotificationPanel";
 /** Desktop horizontal navbar (hidden on mobile — the bottom bar takes over). */
 export function TopNav() {
   const pathname = usePathname();
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    setSession(getStoredSession());
+  }, []);
+
+  const initials = session?.initials ?? mockUser.initials;
+  const streakDays = mockUser.streakDays; // TODO: compute from entries
 
   return (
     <header className="sticky top-0 z-30 hidden h-[62px] items-center justify-between bg-navy px-6 text-white md:flex">
@@ -51,7 +61,7 @@ export function TopNav() {
       <div className="flex items-center gap-3">
         <span className="inline-flex items-center gap-1.5 rounded-[10px] bg-white/10 px-3 py-2 text-[12.5px] font-bold text-amber">
           <FlameIcon size={14} />
-          {mockUser.streakDays}-day streak
+          {streakDays}-day streak
         </span>
         <Link
           href="/scan"
@@ -62,7 +72,7 @@ export function TopNav() {
         </Link>
         <NotificationBell />
         <span className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[11px] bg-white/[0.14] text-[13px] font-bold text-white">
-          {mockUser.initials}
+          {initials}
         </span>
       </div>
     </header>

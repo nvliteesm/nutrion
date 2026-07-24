@@ -79,6 +79,35 @@ function afternoonSweetDrink(entries: IntakeEntry[], endIso: string): {
   return { count, days: 7 };
 }
 
+export interface SeriesPoint {
+  label: string;
+  value: number;
+}
+
+/**
+ * Daily values for a metric over the period (oldest → newest), for charts.
+ * Days with no logs contribute 0.
+ */
+export function dailySeries(
+  entries: IntakeEntry[],
+  targets: NutritionTargets,
+  endIso: string,
+  periodDays: number,
+  metric: "addedSugar_g" | "calories" = "addedSugar_g",
+): SeriesPoint[] {
+  const byDate = groupByDate(entries);
+  const keys = periodKeys(endIso, periodDays).reverse(); // oldest first
+  return keys.map((key) => {
+    const dayEntries = byDate.get(key) ?? [];
+    const totals = buildDailyTotals(key, dayEntries, targets);
+    const d = new Date(`${key}T00:00:00`);
+    return {
+      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      value: metric === "calories" ? totals.calories : totals.addedSugar_g,
+    };
+  });
+}
+
 export function computeInsights(
   entries: IntakeEntry[],
   targets: NutritionTargets,

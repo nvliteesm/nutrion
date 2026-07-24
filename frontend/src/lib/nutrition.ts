@@ -58,7 +58,6 @@ export function deriveStatus(
   // Very light logging for the day — treat as incomplete rather than "within".
   if (entryCount < 2 && worst < 0.4) return "incomplete";
 
-  if (worst > 1.25) return "above";
   if (worst > 1) return "above";
   if (worst >= 0.85) return "approaching";
   return "within";
@@ -91,4 +90,15 @@ export function buildDailyTotals(
 export function progress(value: number, max: number): number {
   if (max <= 0) return 0;
   return Math.min(Math.max(value / max, 0), 1);
+}
+
+/**
+ * Parse a numeric input value, rejecting NaN and negatives.
+ * Optionally clamp to a maximum. Used across all nutrition number inputs.
+ */
+export function parseNonNegative(raw: string | number, max?: number): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  if (max !== undefined && n > max) return max;
+  return n;
 }

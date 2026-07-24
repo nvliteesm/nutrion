@@ -66,7 +66,7 @@ export function NotificationBell() {
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end" onClick={handleClose}>
           <div
-            className="flex h-full w-full max-w-[400px] flex-col bg-card shadow-card-lg"
+            className="flex h-full w-full max-w-[400px] animate-scale-in flex-col bg-card shadow-card-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-line px-5 py-4">

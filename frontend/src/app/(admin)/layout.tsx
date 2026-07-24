@@ -29,7 +29,7 @@ export default function AdminLayout({
 
   return (
     <div className="flex min-h-full">
-      <aside className="sticky top-0 hidden h-dvh w-[220px] shrink-0 flex-col border-r border-line bg-white md:flex">
+      <aside className="sticky top-0 hidden h-dvh w-[220px] shrink-0 flex-col border-r border-line bg-card md:flex">
         <div className="flex items-center gap-2.5 px-5 py-5 text-navy">
           <Logo />
         </div>

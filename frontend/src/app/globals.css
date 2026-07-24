@@ -1,57 +1,143 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (toggled by adding `.dark` on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
-  NutriON design tokens — lifted from the hi-fi mockup.
-  Light theme only for now; dark-mode tokens land in the final phase.
+  NutriON design tokens.
+  Color utilities map to CSS variables so a single `.dark` class swaps the
+  whole palette. Brand hues stay recognizable; surfaces + ink invert.
 */
 @theme {
   --font-sans: var(--font-jakarta), system-ui, -apple-system, sans-serif;
 
-  /* Brand — navy */
-  --color-navy: #122a45;
-  --color-navy-2: #1b3a5c;
-  --color-navy-ink: #0e2138;
+  --color-navy: var(--c-navy);
+  --color-navy-2: var(--c-navy-2);
+  --color-navy-ink: var(--c-navy-ink);
 
-  /* Teal (primary / within-target) */
-  --color-teal: #12b886;
-  --color-teal-d: #0e9b72;
-  --color-teal-t: #e3f7f0;
+  --color-teal: var(--c-teal);
+  --color-teal-d: var(--c-teal-d);
+  --color-teal-t: var(--c-teal-t);
 
-  /* Blue (drinks / hydration) */
-  --color-blue: #3e9be8;
-  --color-blue-d: #2a7fc4;
-  --color-blue-t: #e7f2fc;
+  --color-blue: var(--c-blue);
+  --color-blue-d: var(--c-blue-d);
+  --color-blue-t: var(--c-blue-t);
 
-  /* Amber (estimate / approaching / moderately over) */
-  --color-amber: #efa02a;
-  --color-amber-d: #b9760c;
-  --color-amber-t: #fcf1de;
+  --color-amber: var(--c-amber);
+  --color-amber-d: var(--c-amber-d);
+  --color-amber-t: var(--c-amber-t);
 
-  /* Red (significantly over / error) */
-  --color-red: #e4574c;
-  --color-red-d: #c13b32;
-  --color-red-t: #fbeae8;
+  --color-red: var(--c-red);
+  --color-red-d: var(--c-red-d);
+  --color-red-t: var(--c-red-t);
 
-  /* Ink (text) */
-  --color-ink: #152230;
-  --color-ink-2: #586a7b;
-  --color-ink-3: #8a99a8;
+  --color-ink: var(--c-ink);
+  --color-ink-2: var(--c-ink-2);
+  --color-ink-3: var(--c-ink-3);
 
-  /* Surfaces + lines */
-  --color-line: #e6ebf1;
-  --color-line-2: #d6dee7;
-  --color-app-bg: #eef2f7;
-  --color-card: #ffffff;
+  --color-line: var(--c-line);
+  --color-line-2: var(--c-line-2);
+  --color-app-bg: var(--c-app-bg);
+  --color-card: var(--c-card);
 
-  /* Radii */
   --radius-card-sm: 11px;
   --radius-card: 16px;
   --radius-card-lg: 22px;
 
-  /* Shadows */
-  --shadow-card: 0 1px 3px rgba(18, 42, 69, 0.06);
-  --shadow-card-lg: 0 6px 24px rgba(18, 42, 69, 0.1), 0 1px 3px rgba(18, 42, 69, 0.06);
+  --shadow-card: 0 1px 3px var(--c-shadow);
+  --shadow-card-lg: 0 6px 24px var(--c-shadow-lg), 0 1px 3px var(--c-shadow);
   --shadow-float: 0 6px 16px rgba(18, 184, 134, 0.4);
+
+  --animate-fade-up: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-scale-in: scale-in 0.18s ease-out both;
+  --animate-slide-up: slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+:root {
+  --c-navy: #122a45;
+  --c-navy-2: #1b3a5c;
+  --c-navy-ink: #0e2138;
+  --c-teal: #12b886;
+  --c-teal-d: #0e9b72;
+  --c-teal-t: #e3f7f0;
+  --c-blue: #3e9be8;
+  --c-blue-d: #2a7fc4;
+  --c-blue-t: #e7f2fc;
+  --c-amber: #efa02a;
+  --c-amber-d: #b9760c;
+  --c-amber-t: #fcf1de;
+  --c-red: #e4574c;
+  --c-red-d: #c13b32;
+  --c-red-t: #fbeae8;
+  --c-ink: #152230;
+  --c-ink-2: #586a7b;
+  --c-ink-3: #8a99a8;
+  --c-line: #e6ebf1;
+  --c-line-2: #d6dee7;
+  --c-app-bg: #eef2f7;
+  --c-card: #ffffff;
+  --c-shadow: rgba(18, 42, 69, 0.06);
+  --c-shadow-lg: rgba(18, 42, 69, 0.1);
+}
+
+.dark {
+  --c-navy: #16283d;
+  --c-navy-2: #1b3a5c;
+  --c-navy-ink: #0b1622;
+  --c-teal: #16c496;
+  --c-teal-d: #3fd3ad;
+  --c-teal-t: rgba(18, 184, 134, 0.16);
+  --c-blue: #4aa8f0;
+  --c-blue-d: #7cc0f5;
+  --c-blue-t: rgba(62, 155, 232, 0.16);
+  --c-amber: #f2ad45;
+  --c-amber-d: #f4bd6b;
+  --c-amber-t: rgba(239, 160, 42, 0.16);
+  --c-red: #ef6459;
+  --c-red-d: #f2857c;
+  --c-red-t: rgba(228, 87, 76, 0.16);
+  --c-ink: #eaf1f8;
+  --c-ink-2: #9db0c4;
+  --c-ink-3: #6e839b;
+  --c-line: #24384f;
+  --c-line-2: #2e4560;
+  --c-app-bg: #0b1622;
+  --c-card: #14263a;
+  --c-shadow: rgba(0, 0, 0, 0.3);
+  --c-shadow-lg: rgba(0, 0, 0, 0.45);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 html,
@@ -63,4 +149,14 @@ body {
   background: var(--color-app-bg);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

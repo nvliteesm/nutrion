@@ -10,7 +10,8 @@ import {
   SearchIcon,
   SparkleIcon,
 } from "@/components/icons";
-import { computeInsights } from "@/lib/analytics";
+import { LineChart } from "@/components/ui";
+import { computeInsights, dailySeries } from "@/lib/analytics";
 import type { IntakeEntry, NutritionTargets } from "@/lib/types";
 
 const PERIODS = [7, 30, 90] as const;
@@ -31,6 +32,10 @@ export function InsightsPremium({
   );
 
   const topSource = data.sources[0] ?? null;
+  const series = useMemo(
+    () => dailySeries(entries, targets, endIso, period, "addedSugar_g"),
+    [entries, targets, endIso, period],
+  );
 
   return (
     <div>
@@ -64,6 +69,23 @@ export function InsightsPremium({
           ))}
         </div>
       </div>
+
+      <Card className="mb-4 p-5">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-teal-t text-teal-d">
+            <ChartIcon size={16} />
+          </span>
+          <span className="text-[11px] font-bold tracking-wide text-ink-3">
+            ADDED SUGAR TREND
+          </span>
+        </div>
+        <LineChart
+          data={series}
+          target={targets.addedSugar_g}
+          unit="g"
+          colorClass="text-teal"
+        />
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <InsightCard icon={<SearchIcon size={16} />} iconClass="bg-teal-t text-teal-d" label="PATTERN DETECTED">

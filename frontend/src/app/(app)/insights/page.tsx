@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { getAllEntries } from "@/lib/api";
 import { getStoredSession } from "@/lib/auth";
-import { mockUser, MOCK_TODAY } from "@/lib/mock-data";
+import { getToday } from "@/lib/date";
+import { mockUser } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui";
 import type { IntakeEntry, Subscription } from "@/lib/types";
 import { InsightsLocked } from "@/components/insights/InsightsLocked";
 import { InsightsPremium } from "@/components/insights/InsightsPremium";
@@ -18,9 +20,7 @@ export default function InsightsPage() {
   }, []);
 
   if (subscription === null) {
-    return (
-      <div className="h-40 animate-pulse rounded-card-lg bg-black/[0.05]" />
-    );
+    return <Skeleton className="h-40" />;
   }
 
   if (subscription !== "premium") {
@@ -28,16 +28,14 @@ export default function InsightsPage() {
   }
 
   if (!entries) {
-    return (
-      <div className="h-40 animate-pulse rounded-card-lg bg-black/[0.05]" />
-    );
+    return <Skeleton className="h-40" />;
   }
 
   return (
     <InsightsPremium
       entries={entries}
       targets={mockUser.targets}
-      endIso={MOCK_TODAY}
+      endIso={getToday()}
     />
   );
 }

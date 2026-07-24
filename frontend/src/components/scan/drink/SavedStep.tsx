@@ -34,7 +34,7 @@ export function SavedStep({
       </p>
 
       {over > 0 && (
-        <div className="mb-4 w-full max-w-[290px] rounded-card bg-white p-4 text-left shadow-card">
+        <div className="mb-4 w-full max-w-[290px] rounded-card bg-card p-4 text-left shadow-card">
           <div className="mb-2 flex items-center gap-2">
             <AlertTriangleIcon size={15} className="text-amber-d" />
             <span className="text-[11px] font-bold tracking-wide text-amber-d">

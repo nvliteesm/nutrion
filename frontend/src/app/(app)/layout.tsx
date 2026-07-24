@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { ChatProvider } from "@/components/assistant/ChatProvider";
+import { AssistantWidget } from "@/components/assistant/AssistantWidget";
 
 export default function AppLayout({
   children,
@@ -8,7 +10,10 @@ export default function AppLayout({
 }) {
   return (
     <AuthGuard>
-      <AppShell>{children}</AppShell>
+      <ChatProvider>
+        <AppShell>{children}</AppShell>
+        <AssistantWidget />
+      </ChatProvider>
     </AuthGuard>
   );
 }

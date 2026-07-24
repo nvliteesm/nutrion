@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui";
+import { Card, Skeleton } from "@/components/ui";
 import { getAllEntries } from "@/lib/api";
 import { getStoredSession } from "@/lib/auth";
 import { saveMedicalMetrics } from "@/lib/store";
 import { computeInsights } from "@/lib/analytics";
 import { linkedInsight } from "@/lib/medical";
-import { mockUser, MOCK_TODAY } from "@/lib/mock-data";
+import { mockUser } from "@/lib/mock-data";
+import { getToday } from "@/lib/date";
 import type { IntakeEntry, MedicalMetric, Subscription } from "@/lib/types";
 import { MedicalUploadStep } from "@/components/scan/medical/MedicalUploadStep";
 import { MedicalProcessingStep } from "@/components/scan/medical/MedicalProcessingStep";
@@ -28,7 +29,7 @@ export default function ScanMedicalPage() {
   }, []);
 
   const afternoonDays = useMemo(
-    () => computeInsights(entries, mockUser.targets, MOCK_TODAY, 7).afternoonPattern.count,
+    () => computeInsights(entries, mockUser.targets, getToday(), 7).afternoonPattern.count,
     [entries],
   );
 
@@ -54,7 +55,7 @@ export default function ScanMedicalPage() {
   }
 
   if (subscription === null) {
-    return <div className="h-40 animate-pulse rounded-card-lg bg-black/[0.05]" />;
+    return <Skeleton className="h-40" />;
   }
 
   if (subscription !== "premium") {

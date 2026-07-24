@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Badge, Button, Card, ProgressBar } from "@/components/ui";
+import { Badge, Button, Card, ProgressBar, Skeleton } from "@/components/ui";
 import {
   DownloadIcon,
   FileTextIcon,
@@ -12,7 +12,8 @@ import {
 import { getAllEntries } from "@/lib/api";
 import { getStoredSession } from "@/lib/auth";
 import { formatNumber } from "@/lib/format";
-import { mockUser, MOCK_TODAY } from "@/lib/mock-data";
+import { getToday } from "@/lib/date";
+import { mockUser } from "@/lib/mock-data";
 import { generateReport, type PersonalReport } from "@/lib/report";
 import type { IntakeEntry, Subscription } from "@/lib/types";
 
@@ -31,13 +32,13 @@ export default function ReportPage() {
   const report: PersonalReport | null = useMemo(
     () =>
       entries.length
-        ? generateReport(mockUser.fullName, entries, mockUser.targets, MOCK_TODAY, period)
+        ? generateReport(mockUser.fullName, entries, mockUser.targets, getToday(), period)
         : null,
     [entries, period],
   );
 
   if (subscription === null) {
-    return <div className="h-40 animate-pulse rounded-card-lg bg-black/[0.05]" />;
+    return <Skeleton className="h-40" />;
   }
 
   if (subscription !== "premium") {
@@ -61,7 +62,7 @@ export default function ReportPage() {
   }
 
   if (!report) {
-    return <div className="h-40 animate-pulse rounded-card-lg bg-black/[0.05]" />;
+    return <Skeleton className="h-40" />;
   }
 
   function handleDownload() {

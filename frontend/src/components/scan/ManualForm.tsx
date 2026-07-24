@@ -6,7 +6,9 @@ import { Card, Button } from "@/components/ui";
 import { Field } from "@/components/auth/Field";
 import { CupIcon, DropletIcon, UtensilsIcon, CheckIcon } from "@/components/icons";
 import { addEntry, addFavorite, getFavorites } from "@/lib/store";
-import { MOCK_TODAY } from "@/lib/mock-data";
+import { getToday, getNowHHMM } from "@/lib/date";
+import { parseNonNegative } from "@/lib/nutrition";
+import { useToast } from "@/components/ui";
 import type { EntryType, Favorite, IntakeEntry } from "@/lib/types";
 
 const tabs: { type: EntryType; label: string; icon: typeof CupIcon }[] = [
@@ -16,9 +18,7 @@ const tabs: { type: EntryType; label: string; icon: typeof CupIcon }[] = [
 ];
 
 function currentHHMM(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return getNowHHMM();
 }
 
 const zeroNutrients = () => ({
@@ -33,6 +33,7 @@ const zeroNutrients = () => ({
 
 export function ManualForm() {
   const router = useRouter();
+  const { toast } = useToast();
   const [tab, setTab] = useState<EntryType>("food");
 
   const [name, setName] = useState("");
@@ -49,8 +50,9 @@ export function ManualForm() {
 
   const num = (key: keyof ReturnType<typeof zeroNutrients>) => ({
     value: n[key],
+    min: 0,
     onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-      setN((prev) => ({ ...prev, [key]: Number(e.target.value) || 0 })),
+      setN((prev) => ({ ...prev, [key]: parseNonNegative(e.target.value) })),
   });
 
   const canSave =
@@ -65,7 +67,7 @@ export function ManualForm() {
 
   function handleSave() {
     if (!canSave) return;
-    const loggedAt = `${MOCK_TODAY}T${time}:00`;
+    const loggedAt = `${getToday()}T${time}:00`;
 
     let entry: Omit<IntakeEntry, "id">;
     if (tab === "water") {
@@ -101,6 +103,11 @@ export function ManualForm() {
     }
 
     addEntry(entry);
+    toast({
+      title: "Entry saved",
+      description: tab === "water" ? "Water added to Today" : `${entry.name} added to Today`,
+      variant: "success",
+    });
     router.push("/today");
   }
 
@@ -172,7 +179,8 @@ export function ManualForm() {
               name="volume"
               type="number"
               value={volumeMl}
-              onChange={(e) => setVolumeMl(Number(e.target.value) || 0)}
+              min={0}
+              onChange={(e) => setVolumeMl(parseNonNegative(e.target.value))}
             />
           )}
 

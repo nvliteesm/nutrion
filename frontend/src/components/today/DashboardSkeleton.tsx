@@ -1,5 +1,5 @@
 function Block({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-card-lg bg-black/[0.05] ${className}`} />;
+  return <div className={`animate-pulse rounded-card-lg bg-ink/[0.06] ${className}`} />;
 }
 
 /** Loading placeholder that mirrors the dashboard layout. */

@@ -218,6 +218,32 @@ export const BellIcon = (p: IconProps) => (
   </Stroke>
 );
 
+export const ChatIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    <path d="M8 12h.01M12 12h.01M16 12h.01" />
+  </Stroke>
+);
+
+export const ExpandIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+  </Stroke>
+);
+
+export const SunIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4" />
+  </Stroke>
+);
+
+export const MoonIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+  </Stroke>
+);
+
 export const FileTextIcon = (p: IconProps) => (
   <Stroke {...p}>
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />

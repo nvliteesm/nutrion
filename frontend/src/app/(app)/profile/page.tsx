@@ -15,6 +15,7 @@ import { clearSession, getStoredSession, type Session } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import type { NutritionTargets } from "@/lib/types";
 import { mockUser } from "@/lib/mock-data";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -126,6 +127,19 @@ export default function ProfilePage() {
         )}
         <ProfileLink href="/assistant" label="AI nutrition assistant" icon={<SparkleIcon size={18} />} />
         <ProfileLink href="/admin" label="Admin portal" icon={<ChartIcon size={18} />} />
+      </Card>
+
+      {/* Appearance */}
+      <Card className="mb-4 p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[14px] font-bold text-ink">Appearance</div>
+            <div className="text-[12px] font-medium text-ink-3">
+              Switch between light and dark
+            </div>
+          </div>
+          <ThemeToggle />
+        </div>
       </Card>
 
       {/* Danger zone */}

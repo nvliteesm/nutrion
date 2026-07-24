@@ -72,7 +72,7 @@ export function MedicalReviewStep({
                     onChange={(e) =>
                       onEditValue(metric.id, Number(e.target.value) || 0)
                     }
-                    className="w-20 rounded-md border border-line-2 bg-white px-2 py-1 text-right text-[15px] font-bold text-ink focus:border-teal focus:outline-none"
+                    className="w-20 rounded-md border border-line-2 bg-card px-2 py-1 text-right text-[15px] font-bold text-ink focus:border-teal focus:outline-none"
                   />
                   <span className="text-[11px] font-semibold text-ink-3">
                     {metric.unit}

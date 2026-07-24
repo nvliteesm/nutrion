@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, Button, Badge } from "@/components/ui";
 import { PlusIcon, XIcon } from "@/components/icons";
 import { formatNumber } from "@/lib/format";
-import { MOCK_TODAY } from "@/lib/mock-data";
+import { getToday } from "@/lib/date";
 import type { DetectedFoodItem, FoodAnalysis, IntakeEntry } from "@/lib/types";
 
 function trimNum(n: number): string {
@@ -14,7 +14,7 @@ function trimNum(n: number): string {
 function nowOnToday(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${MOCK_TODAY}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  return `${getToday()}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 }
 
 let addedCounter = 0;

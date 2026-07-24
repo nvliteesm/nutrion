@@ -47,7 +47,7 @@ function Field({
 
 function inputClassName() {
   return cn(
-    "w-full rounded-card-sm border border-line bg-white px-3 py-2.5 text-sm text-ink",
+    "w-full rounded-card-sm border border-line bg-card px-3 py-2.5 text-sm text-ink",
     "outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20",
   );
 }

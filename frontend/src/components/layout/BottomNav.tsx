@@ -28,7 +28,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-white px-0 pb-3.5 pt-2 md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-card px-0 pb-3.5 pt-2 md:hidden">
       {left.map((item) => (
         <NavButton
           key={item.href}

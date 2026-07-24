@@ -20,7 +20,7 @@ export function DashboardHeader({
           {greeting()}, {firstName(fullName)}
         </h1>
       </div>
-      <span className="inline-flex items-center gap-1.5 rounded-[11px] bg-white px-3 py-2 text-[12px] font-bold text-amber-d shadow-card">
+      <span className="inline-flex items-center gap-1.5 rounded-[11px] bg-card px-3 py-2 text-[12px] font-bold text-amber-d shadow-card">
         <FlameIcon size={14} />
         {streakDays}-day streak
       </span>

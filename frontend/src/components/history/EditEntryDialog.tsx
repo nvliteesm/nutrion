@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui";
 import { Field } from "@/components/auth/Field";
 import { XIcon } from "@/components/icons";
+import { parseNonNegative } from "@/lib/nutrition";
 import type { IntakeEntry } from "@/lib/types";
 
 /** Compact editor for a single entry's core fields. */
@@ -21,8 +22,9 @@ export function EditEntryDialog({
 
   const num = (key: keyof typeof n) => ({
     value: n[key] ?? 0,
+    min: 0,
     onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-      setN((prev) => ({ ...prev, [key]: Number(e.target.value) || 0 })),
+      setN((prev) => ({ ...prev, [key]: parseNonNegative(e.target.value) })),
   });
 
   function handleSave() {
@@ -38,7 +40,7 @@ export function EditEntryDialog({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[440px] rounded-t-card-lg bg-card p-5 md:rounded-card-lg"
+        className="w-full max-w-[440px] animate-slide-up rounded-t-card-lg bg-card p-5 md:animate-scale-in md:rounded-card-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

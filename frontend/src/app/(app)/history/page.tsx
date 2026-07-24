@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getAllEntries } from "@/lib/api";
-import { deleteEntry, updateEntry } from "@/lib/store";
-import { mockUser, MOCK_TODAY } from "@/lib/mock-data";
+import { deleteEntry, restoreEntry, updateEntry } from "@/lib/store";
+import { Skeleton, useToast } from "@/components/ui";
+import { getToday } from "@/lib/date";
+import { mockUser } from "@/lib/mock-data";
 import {
   buildMonthGrid,
   groupByDate,
@@ -16,12 +18,13 @@ import { DayDetail } from "@/components/history/DayDetail";
 import { EditEntryDialog } from "@/components/history/EditEntryDialog";
 
 const targets = mockUser.targets;
-const [ty, tm] = [Number(MOCK_TODAY.slice(0, 4)), Number(MOCK_TODAY.slice(5, 7)) - 1];
 
 export default function HistoryPage() {
   const [entries, setEntries] = useState<IntakeEntry[] | null>(null);
+  const todayIso = getToday();
+  const [ty, tm] = [Number(todayIso.slice(0, 4)), Number(todayIso.slice(5, 7)) - 1];
   const [cursor, setCursor] = useState({ year: ty, month0: tm });
-  const [selectedIso, setSelectedIso] = useState(MOCK_TODAY);
+  const [selectedIso, setSelectedIso] = useState(todayIso);
   const [editing, setEditing] = useState<IntakeEntry | null>(null);
 
   useEffect(() => {
@@ -34,13 +37,13 @@ export default function HistoryPage() {
   );
 
   const grid = useMemo(
-    () => buildMonthGrid(cursor.year, cursor.month0, byDate, targets, MOCK_TODAY),
-    [cursor, byDate],
+    () => buildMonthGrid(cursor.year, cursor.month0, byDate, targets, todayIso),
+    [cursor, byDate, todayIso],
   );
 
   const week = useMemo(
-    () => weekSummary(byDate, targets, MOCK_TODAY),
-    [byDate],
+    () => weekSummary(byDate, targets, todayIso),
+    [byDate, todayIso],
   );
 
   const monthLabel = new Date(cursor.year, cursor.month0, 1).toLocaleDateString(
@@ -50,18 +53,36 @@ export default function HistoryPage() {
 
   const selectedEntries = byDate.get(selectedIso) ?? [];
 
+  const { toast } = useToast();
+
   function refresh() {
     getAllEntries().then(setEntries);
   }
 
   function handleDelete(id: string) {
+    const removed = (entries ?? []).find((e) => e.id === id);
     deleteEntry(id);
     refresh();
+    toast({
+      title: "Entry deleted",
+      description: removed?.name,
+      variant: "info",
+      action: removed
+        ? {
+            label: "Undo",
+            onClick: () => {
+              restoreEntry(removed);
+              refresh();
+            },
+          }
+        : undefined,
+    });
   }
 
   function handleSaveEdit(id: string, patch: Partial<IntakeEntry>) {
     updateEntry(id, patch);
     refresh();
+    toast({ title: "Entry updated", variant: "success" });
   }
 
   function stepMonth(delta: number) {
@@ -75,7 +96,13 @@ export default function HistoryPage() {
     return (
       <div className="flex flex-col gap-4">
         <h1 className="text-[24px] font-extrabold tracking-tight text-ink">History</h1>
-        <div className="h-40 animate-pulse rounded-card-lg bg-black/[0.05]" />
+        <div className="grid gap-4 md:grid-cols-[1fr_340px] md:gap-6">
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-80" />
+          </div>
+          <Skeleton className="h-64" />
+        </div>
       </div>
     );
   }
@@ -93,7 +120,7 @@ export default function HistoryPage() {
             monthLabel={monthLabel}
             cells={grid}
             selectedIso={selectedIso}
-            todayIso={MOCK_TODAY}
+            todayIso={todayIso}
             onSelect={setSelectedIso}
             onPrev={() => stepMonth(-1)}
             onNext={() => stepMonth(1)}

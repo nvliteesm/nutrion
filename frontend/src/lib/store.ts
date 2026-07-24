@@ -9,8 +9,8 @@ import type { Favorite, IntakeEntry, MedicalMetric } from "./types";
  * on Today and in History. Swap for API calls when the backend is ready.
  */
 
-// v2: seed now includes a full month of history.
-const ENTRIES_KEY = "nutrion.entries.v2";
+// v3: seeds use real today instead of hardcoded date.
+const ENTRIES_KEY = "nutrion.entries.v3";
 const FAVORITES_KEY = "nutrion.favorites";
 const METRICS_KEY = "nutrion.metrics";
 
@@ -65,6 +65,15 @@ export function deleteEntry(id: string): void {
     ENTRIES_KEY,
     getEntries().filter((e) => e.id !== id),
   );
+}
+
+/** Re-insert a previously deleted entry, preserving its id (for undo). */
+export function restoreEntry(entry: IntakeEntry): void {
+  const stored = getEntries().filter((e) => e.id !== entry.id);
+  const next = [entry, ...stored].sort((a, b) =>
+    a.loggedAt < b.loggedAt ? 1 : -1,
+  );
+  write(ENTRIES_KEY, next);
 }
 
 export function getFavorites(): Favorite[] {

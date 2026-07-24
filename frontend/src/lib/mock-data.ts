@@ -1,9 +1,10 @@
+import { getToday } from "./date";
 import type { IntakeEntry, Nutrients, UserProfile } from "./types";
 
 /**
- * Dummy data so the frontend runs fully offline while the backend is built.
- * Mirrors the mockup (Maya, Jul 24) for "today" and generates a deterministic
- * month of past entries so History / calendar / analytics have real content.
+ * Seed data. Entries are generated relative to the *real* today so the
+ * dashboard, calendar, and analytics always work regardless of when the
+ * app is demoed.
  */
 
 export const mockUser: UserProfile = {
@@ -21,17 +22,16 @@ export const mockUser: UserProfile = {
   streakDays: 6,
 };
 
-// "Today" is pinned to the mockup date so seeded entries line up.
-export const MOCK_TODAY = "2026-07-24";
-const TODAY_DAY = 24;
-const YEAR = 2026;
-const MONTH = 7; // July
+/** Helper to get a date string N days before today. */
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
-const iso = (day: number, time: string): string => {
-  const dd = String(day).padStart(2, "0");
-  const mm = String(MONTH).padStart(2, "0");
-  return `${YEAR}-${mm}-${dd}T${time}:00`;
-};
+function iso(dateStr: string, time: string): string {
+  return `${dateStr}T${time}:00`;
+}
 
 const nut = (
   calories: number,
@@ -74,60 +74,63 @@ const MENU: MenuItem[] = [
 
 const MEAL_TIMES = ["08:00", "12:30", "15:30", "19:00", "21:00"];
 
-/** Today's entries — matches the mockup numbers. */
-const todaysEntries: IntakeEntry[] = [
-  {
-    id: "e_yogurt",
-    type: "food",
-    name: "Greek yogurt with honey",
-    loggedAt: iso(TODAY_DAY, "08:12"),
-    source: "manual",
-    confirmed: true,
-    portion: "1 cup (200 g)",
-    nutrients: nut(210, 24, 20, 8, 14, 6),
-  },
-  {
-    id: "e_latte",
-    type: "drink",
-    name: "Oat milk latte",
-    loggedAt: iso(TODAY_DAY, "10:05"),
-    source: "label",
-    confidence: "high",
-    confirmed: true,
-    portion: "1 cup (350 ml)",
-    volumeMl: 350,
-    nutrients: nut(180, 24, 16, 12, 6, 6, 120),
-  },
-  {
-    id: "e_salad",
-    type: "food",
-    name: "Chicken Caesar salad",
-    loggedAt: iso(TODAY_DAY, "12:40"),
-    source: "ai",
-    confidence: "medium",
-    confirmed: true,
-    portion: "1 bowl",
-    caloriesRange: [480, 620],
-    nutrients: nut(550, 22, 6, 4, 34, 30),
-  },
-  {
-    id: "e_roll",
-    type: "food",
-    name: "Whole-grain roll",
-    loggedAt: iso(TODAY_DAY, "12:45"),
-    source: "manual",
-    confirmed: true,
-    portion: "1 roll",
-    nutrients: nut(480, 85, 6, 4, 8, 6),
-  },
-];
+/** Today's seed entries — matches the mockup's dashboard numbers. */
+function todaysEntries(): IntakeEntry[] {
+  const today = getToday();
+  return [
+    {
+      id: "e_yogurt",
+      type: "food",
+      name: "Greek yogurt with honey",
+      loggedAt: iso(today, "08:12"),
+      source: "manual",
+      confirmed: true,
+      portion: "1 cup (200 g)",
+      nutrients: nut(210, 24, 20, 8, 14, 6),
+    },
+    {
+      id: "e_latte",
+      type: "drink",
+      name: "Oat milk latte",
+      loggedAt: iso(today, "10:05"),
+      source: "label",
+      confidence: "high",
+      confirmed: true,
+      portion: "1 cup (350 ml)",
+      volumeMl: 350,
+      nutrients: nut(180, 24, 16, 12, 6, 6, 120),
+    },
+    {
+      id: "e_salad",
+      type: "food",
+      name: "Chicken Caesar salad",
+      loggedAt: iso(today, "12:40"),
+      source: "ai",
+      confidence: "medium",
+      confirmed: true,
+      portion: "1 bowl",
+      caloriesRange: [480, 620],
+      nutrients: nut(550, 22, 6, 4, 34, 30),
+    },
+    {
+      id: "e_roll",
+      type: "food",
+      name: "Whole-grain roll",
+      loggedAt: iso(today, "12:45"),
+      source: "manual",
+      confirmed: true,
+      portion: "1 roll",
+      nutrients: nut(480, 85, 6, 4, 8, 6),
+    },
+  ];
+}
 
-function waterFor(day: number, cups: number): IntakeEntry[] {
+function waterFor(dateStr: string, cups: number): IntakeEntry[] {
   return Array.from({ length: cups }).map((_, i) => ({
-    id: `e_water_${day}_${i}`,
+    id: `e_water_${dateStr}_${i}`,
     type: "water",
     name: "Water",
-    loggedAt: iso(day, `${String(9 + i).padStart(2, "0")}:00`),
+    loggedAt: iso(dateStr, `${String(9 + i).padStart(2, "0")}:00`),
     source: "manual",
     confirmed: true,
     volumeMl: 250,
@@ -135,21 +138,23 @@ function waterFor(day: number, cups: number): IntakeEntry[] {
   }));
 }
 
-/** Deterministic entries for a single past day. */
-function pastDay(day: number): IntakeEntry[] {
-  // A couple of days have no logs (grey) or only light logging (blue).
-  if (day % 11 === 0) return [];
+/** Deterministic entries for a given day-offset from today. */
+function pastDay(offset: number): IntakeEntry[] {
+  const dateStr = daysAgo(offset);
+  const day = offset; // use offset as seed
+
+  if (day % 11 === 0) return []; // no data day
   const light = day % 7 === 5;
-  const count = light ? 1 : 3 + (day % 3); // 1, or 3..5 items
+  const count = light ? 1 : 3 + (day % 3);
 
   const items: IntakeEntry[] = [];
   for (let i = 0; i < count; i++) {
     const menu = MENU[(day * 3 + i * 5) % MENU.length];
     items.push({
-      id: `e_${day}_${i}`,
+      id: `e_past_${offset}_${i}`,
       type: menu.type,
       name: menu.name,
-      loggedAt: iso(day, MEAL_TIMES[i % MEAL_TIMES.length]),
+      loggedAt: iso(dateStr, MEAL_TIMES[i % MEAL_TIMES.length]),
       source: menu.source,
       confidence: menu.source === "ai" ? "medium" : menu.source === "label" ? "high" : undefined,
       confirmed: true,
@@ -158,17 +163,18 @@ function pastDay(day: number): IntakeEntry[] {
       nutrients: { ...menu.nutrients },
     });
   }
-  if (!light) items.push(...waterFor(day, 4 + (day % 5)));
+  if (!light) items.push(...waterFor(dateStr, 4 + (day % 5)));
   return items;
 }
 
 function buildSeed(): IntakeEntry[] {
-  const all: IntakeEntry[] = [...todaysEntries];
-  for (let day = 1; day < TODAY_DAY; day++) {
-    all.push(...pastDay(day));
+  const all: IntakeEntry[] = [...todaysEntries()];
+  // Seed 30 days of past data
+  for (let offset = 1; offset <= 30; offset++) {
+    all.push(...pastDay(offset));
   }
   return all.sort((a, b) => (a.loggedAt < b.loggedAt ? 1 : -1));
 }
 
-/** Full seed: today + a month of past entries. */
+/** Full seed: today + 30 days of past entries. */
 export const mockSeedEntries: IntakeEntry[] = buildSeed();

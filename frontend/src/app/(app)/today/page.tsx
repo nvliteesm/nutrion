@@ -16,6 +16,7 @@ import { QuickActions } from "@/components/today/QuickActions";
 import { RecentEntries } from "@/components/today/RecentEntries";
 import { InsightCard } from "@/components/today/InsightCard";
 import { DashboardSkeleton } from "@/components/today/DashboardSkeleton";
+import { EmptyDashboard } from "@/components/today/EmptyDashboard";
 
 interface DashboardData {
   user: UserProfile;
@@ -42,8 +43,12 @@ export default function TodayPage() {
 
   const { user, totals, entries } = data;
 
+  if (entries.length === 0) {
+    return <EmptyDashboard fullName={user.fullName} />;
+  }
+
   return (
-    <div className="flex flex-col gap-4 md:gap-[18px]">
+    <div className="flex animate-fade-up flex-col gap-4 md:gap-[18px]">
       <DashboardHeader
         fullName={user.fullName}
         dateIso={totals.date}
