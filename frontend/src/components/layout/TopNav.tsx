@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getStoredSession, type Session } from "@/lib/auth";
+import { getCurrentUserId, getStoredSession, type Session } from "@/lib/auth";
 import { localDayKey } from "@/lib/date";
 import { FlameIcon, PlusIcon } from "@/components/icons";
 import { Logo } from "./Logo";
@@ -10,7 +10,11 @@ import { NotificationBell } from "./NotificationPanel";
 
 async function fetchStreak(): Promise<number> {
   try {
-    const res = await fetch("/intakes?limit=300");
+    const q = new URLSearchParams({
+      user_id: getCurrentUserId(),
+      limit: "300",
+    });
+    const res = await fetch(`/intakes?${q}`);
     if (!res.ok) return 0;
     const rows = (await res.json()) as { logged_at: string }[];
     if (!Array.isArray(rows) || rows.length === 0) return 0;

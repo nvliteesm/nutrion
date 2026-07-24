@@ -22,7 +22,7 @@ import {
   dailySodiumSaltWater,
 } from "@/lib/analytics";
 import { askBackend } from "@/lib/assistant";
-import { getStoredSession } from "@/lib/auth";
+import { getCurrentUserId } from "@/lib/auth";
 import {
   fetchMedicalMetrics,
   type BackendMedicalMetric,
@@ -121,13 +121,12 @@ export function InsightsPremium({
   );
 
   useEffect(() => {
-    const userId = getStoredSession()?.userId ?? "default";
-    fetchMedicalMetrics(userId).then(setMetrics);
+    fetchMedicalMetrics(getCurrentUserId()).then(setMetrics);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    const userId = getStoredSession()?.userId ?? "default";
+    const userId = getCurrentUserId();
     setAiLoading(true);
     setAiText(null);
 

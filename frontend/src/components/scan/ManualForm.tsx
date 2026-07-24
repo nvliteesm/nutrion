@@ -12,6 +12,7 @@ import {
   CheckIcon,
 } from "@/components/icons";
 import { addEntry, addFavorite, getFavorites } from "@/lib/store";
+import { getCurrentUserId } from "@/lib/auth";
 import { getToday, getNowHHMM } from "@/lib/date";
 import { parseNonNegative } from "@/lib/nutrition";
 import { useToast } from "@/components/ui";
@@ -109,7 +110,7 @@ export function ManualForm() {
       const res = await fetch("/memory/intakes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: "default", meal }),
+        body: JSON.stringify({ user_id: getCurrentUserId(), meal }),
       });
 
       if (!res.ok) {

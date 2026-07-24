@@ -200,12 +200,12 @@ export function EntryDetailModal({
 
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             <Metric
-              label="Added sugar"
-              value={`${Math.round(entry.nutrients.addedSugar_g)} g`}
+              label="Protein"
+              value={`${Math.round(entry.nutrients.protein_g)} g`}
             />
             <Metric
-              label="Carbs"
-              value={`${Math.round(entry.nutrients.carbs_g)} g`}
+              label="Sugar"
+              value={`${Math.round(entry.nutrients.totalSugar_g)} g`}
             />
           </div>
 
@@ -269,9 +269,11 @@ export function EntryDetailModal({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-card-sm bg-app-bg px-3.5 py-3">
-      <div className="text-[11px] font-semibold text-ink-3">{label}</div>
-      <div className="mt-1 font-display text-[18px] font-bold text-ink">
+    <div className="flex min-h-[68px] flex-col items-center justify-center rounded-card-sm bg-app-bg px-3.5 py-3 text-center">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">
+        {label}
+      </div>
+      <div className="mt-1 font-display text-[18px] font-bold tabular-nums text-ink">
         {value}
       </div>
     </div>

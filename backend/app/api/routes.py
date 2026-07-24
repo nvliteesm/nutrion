@@ -476,7 +476,7 @@ async def get_intakes(
         session,
         user_id=user_id,
         kind=kind,
-        limit=min(limit, 200),
+        limit=min(limit, 500),
     )
 
 

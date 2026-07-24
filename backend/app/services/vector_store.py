@@ -188,7 +188,13 @@ class VectorStore:
         existing = self.existing_ids()
         missing = [r for r in rows if f"intake-{r.id}" not in existing]
         if not missing:
-            return {"indexed": self.count(), "added": 0, "skipped_existing": len(rows)}
+            repaired = self.sync_user_metadata(rows)
+            return {
+                "indexed": self.count(),
+                "added": 0,
+                "skipped_existing": len(rows),
+                "metadata_repaired": repaired,
+            }
 
         # Probe dims with the first doc so a stub→live mismatch resets once up front.
         probe = (await foundry.embed([_intake_document(missing[0])]))[0]
@@ -200,11 +206,51 @@ class VectorStore:
         for start in range(0, len(missing), _EMBED_BATCH):
             added += await self._upsert_intake_batch(missing[start : start + _EMBED_BATCH])
 
+        repaired = self.sync_user_metadata(rows)
         return {
             "indexed": self.count(),
             "added": added,
             "skipped_existing": len(rows) - len(missing),
+            "metadata_repaired": repaired,
         }
+
+    def sync_user_metadata(self, rows: list[Intake]) -> int:
+        """Align Chroma user_id metadata with Postgres (no re-embed)."""
+        if not rows:
+            return 0
+        existing = self.existing_ids()
+        ids: list[str] = []
+        metas: list[dict[str, Any]] = []
+        for r in rows:
+            doc_id = f"intake-{r.id}"
+            if doc_id not in existing:
+                continue
+            ids.append(doc_id)
+            metas.append(
+                {
+                    "user_id": r.user_id or "default",
+                    "intake_id": r.id,
+                    "source": r.source or "",
+                    "kind": r.kind,
+                    "name": (r.name or "")[:200],
+                }
+            )
+        if not ids:
+            return 0
+        repaired = 0
+        for start in range(0, len(ids), 100):
+            chunk_ids = ids[start : start + 100]
+            chunk_metas = metas[start : start + 100]
+            try:
+                self._collection.update(ids=chunk_ids, metadatas=chunk_metas)
+                repaired += len(chunk_ids)
+            except Exception:  # noqa: BLE001
+                import logging
+
+                logging.getLogger(__name__).exception(
+                    "Failed to sync Chroma user_id metadata"
+                )
+        return repaired
 
 
 vector_store = VectorStore()

@@ -7,7 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { getStoredSession } from "@/lib/auth";
+import { getCurrentUserId, getStoredSession } from "@/lib/auth";
 import {
   askBackend,
   greetingMessage,
@@ -69,7 +69,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     // Add user message + a loading placeholder.
     setMessages((m) => [...m, { role: "user", text: trimmed }, loadingMessage()]);
 
-    const userId = getStoredSession()?.userId ?? "default";
+    const userId = getCurrentUserId();
     askBackend(trimmed, userId).then((answer) => {
       setMessages((m) => {
         const withoutLoading = m.filter((msg) => !msg.loading);

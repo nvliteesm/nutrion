@@ -11,6 +11,7 @@ import {
   confirmFood,
   confirmMedical,
 } from "@/lib/api";
+import { getCurrentUserId } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { applyIntakeTargets, getStoredProfile } from "@/lib/profile";
 import { SCAN_RESUME_KEY } from "@/components/scan/ScanCaptureSheet";
@@ -358,7 +359,7 @@ export default function ScanPage() {
         );
       } else if (mode === "medical") {
         const profile = getStoredProfile();
-        const res = await confirmMedical(analysisId, metrics, "default", {
+        const res = await confirmMedical(analysisId, metrics, undefined, {
           age: profile.personal.age,
           sex: profile.personal.sex,
           height_cm: profile.personal.height_cm,
@@ -390,7 +391,7 @@ export default function ScanPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             question: `I just logged "${itemName}". What's a lower-sugar alternative I could try next time? Keep it to 1-2 sentences.`,
-            user_id: "default",
+            user_id: getCurrentUserId(),
           }),
         })
           .then((r) => (r.ok ? r.json() : null))

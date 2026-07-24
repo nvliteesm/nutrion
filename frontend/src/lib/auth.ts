@@ -69,6 +69,14 @@ export function getStoredSession(): Session | null {
   }
 }
 
+/**
+ * Stable id for API scoping (Maya → `u_maya`, Alex → `u_alex`).
+ * Prefer this over hardcoding `"default"` so chat/analytics match saved logs.
+ */
+export function getCurrentUserId(): string {
+  return getStoredSession()?.userId ?? "default";
+}
+
 export function clearSession(): void {
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(SESSION_KEY);

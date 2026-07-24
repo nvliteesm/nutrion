@@ -193,14 +193,14 @@ function SummaryCard({
         {card.stats.map((s) => (
           <div
             key={s.label}
-            className="rounded-xl border border-line bg-app-bg px-3 py-3"
+            className="flex min-h-[76px] flex-col items-center justify-center rounded-xl border border-line bg-app-bg px-3 py-3 text-center"
           >
             <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">
               {s.label}
             </div>
             <div
               className={cn(
-                "mt-1 font-extrabold tracking-tight text-ink",
+                "mt-1 font-extrabold tracking-tight text-ink tabular-nums",
                 compact ? "text-[16px]" : "text-[18px]",
               )}
             >

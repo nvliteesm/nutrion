@@ -2,7 +2,7 @@ import { getToday, localDayKey } from "./date";
 import { deleteEntry, getEntries, updateEntry } from "./store";
 import { buildDailyTotals } from "./nutrition";
 import { getStoredProfile } from "./profile";
-import { getStoredSession } from "./auth";
+import { getCurrentUserId, getStoredSession } from "./auth";
 import type {
   Confidence,
   DailyTotals,
@@ -119,7 +119,12 @@ function adaptBackendIntake(r: BackendIntake): IntakeEntry {
 
 async function fetchBackendEntries(): Promise<IntakeEntry[]> {
   try {
-    const res = await fetch("/intakes?limit=300");
+    const userId = getCurrentUserId();
+    const q = new URLSearchParams({
+      user_id: userId,
+      limit: "300",
+    });
+    const res = await fetch(`/intakes?${q}`);
     if (!res.ok) return [];
     const rows = (await res.json()) as BackendIntake[];
     if (!Array.isArray(rows)) return [];
@@ -177,12 +182,13 @@ export async function getTodayTotals(): Promise<DailyTotals> {
 }
 
 export async function listMedicalReports(
-  userId = "default",
+  userId?: string,
   limit = 50,
 ): Promise<MedicalReportSummary[]> {
   try {
+    const uid = userId ?? getCurrentUserId();
     const res = await fetch(
-      `/api/medical/reports?user_id=${encodeURIComponent(userId)}&limit=${limit}`,
+      `/api/medical/reports?user_id=${encodeURIComponent(uid)}&limit=${limit}`,
     );
     if (!res.ok) return [];
     return res.json();
@@ -254,7 +260,7 @@ export async function calculateSugarBarrier(input: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: input.user_id ?? "default",
+        user_id: input.user_id ?? getCurrentUserId(),
         age: input.age ?? null,
         sex: input.sex ?? null,
         height_cm: input.height_cm ?? null,
@@ -269,7 +275,7 @@ export async function calculateSugarBarrier(input: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: input.user_id ?? "default",
+          user_id: input.user_id ?? getCurrentUserId(),
           age: input.age ?? null,
           sex: input.sex ?? null,
           height_cm: input.height_cm ?? null,
@@ -317,48 +323,48 @@ async function apiError(res: Response): Promise<never> {
   throw new Error(detail);
 }
 
-export async function analyzeDrink(file: File, userId = "default"): Promise<DrinkAnalyzeResponse> {
+export async function analyzeDrink(file: File, userId?: string): Promise<DrinkAnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
-  form.append("user_id", userId);
+  form.append("user_id", userId ?? getCurrentUserId());
   const res = await fetch(analyzeUrl("/api/drinks/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
 
-export async function confirmDrink(analysisId: string, drink: unknown, userId = "default"): Promise<DrinkConfirmResponse> {
+export async function confirmDrink(analysisId: string, drink: unknown, userId?: string): Promise<DrinkConfirmResponse> {
   const res = await fetch(`/api/drinks/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ drink, user_id: userId }),
+    body: JSON.stringify({ drink, user_id: userId ?? getCurrentUserId() }),
   });
   if (!res.ok) await apiError(res);
   return res.json();
 }
 
-export async function analyzeFood(file: File, userId = "default"): Promise<FoodAnalyzeResponse> {
+export async function analyzeFood(file: File, userId?: string): Promise<FoodAnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
-  form.append("user_id", userId);
+  form.append("user_id", userId ?? getCurrentUserId());
   const res = await fetch(analyzeUrl("/api/foods/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
 
-export async function confirmFood(analysisId: string, food: unknown, userId = "default", name?: string): Promise<FoodConfirmResponse> {
+export async function confirmFood(analysisId: string, food: unknown, userId?: string, name?: string): Promise<FoodConfirmResponse> {
   const res = await fetch(`/api/foods/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ food, user_id: userId, name: name || null }),
+    body: JSON.stringify({ food, user_id: userId ?? getCurrentUserId(), name: name || null }),
   });
   if (!res.ok) await apiError(res);
   return res.json();
 }
 
-export async function analyzeMedical(file: File, userId = "default"): Promise<MedicalAnalyzeResponse> {
+export async function analyzeMedical(file: File, userId?: string): Promise<MedicalAnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
-  form.append("user_id", userId);
+  form.append("user_id", userId ?? getCurrentUserId());
   const res = await fetch(analyzeUrl("/api/medical/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
@@ -367,7 +373,7 @@ export async function analyzeMedical(file: File, userId = "default"): Promise<Me
 export async function confirmMedical(
   analysisId: string,
   metrics: unknown[],
-  userId = "default",
+  userId?: string,
   profile?: {
     age?: number | null;
     sex?: string | null;
@@ -379,7 +385,7 @@ export async function confirmMedical(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       metrics,
-      user_id: userId,
+      user_id: userId ?? getCurrentUserId(),
       age: profile?.age ?? null,
       sex: profile?.sex ?? null,
       height_cm: profile?.height_cm ?? null,
@@ -408,10 +414,13 @@ export interface BackendMedicalMetric {
 }
 
 export async function fetchMedicalMetrics(
-  userId = "default",
+  userId?: string,
 ): Promise<BackendMedicalMetric[]> {
   try {
-    const q = new URLSearchParams({ user_id: userId, limit: "50" });
+    const q = new URLSearchParams({
+      user_id: userId ?? getCurrentUserId(),
+      limit: "50",
+    });
     const res = await fetch(`/api/medical/metrics?${q}`);
     if (!res.ok) return [];
     const rows = (await res.json()) as BackendMedicalMetric[];
@@ -422,11 +431,11 @@ export async function fetchMedicalMetrics(
 }
 
 /** Log water volume (ml). Hold-to-fill commits full sips and partials on release. */
-export async function logWaterSip(ml = 30, userId = "default"): Promise<{ intake_id: number; ml: number }> {
+export async function logWaterSip(ml = 30, userId?: string): Promise<{ intake_id: number; ml: number }> {
   const res = await fetch("/api/water/sip", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: userId, ml }),
+    body: JSON.stringify({ user_id: userId ?? getCurrentUserId(), ml }),
   });
   if (!res.ok) await apiError(res);
   return res.json();
@@ -441,11 +450,11 @@ export async function deleteIntake(intakeId: number | string): Promise<void> {
 /** Upload recorded audio for Azure Speech transcription. */
 export async function transcribeAudio(
   file: File,
-  userId = "default",
+  userId?: string,
 ): Promise<{ transcript: string; status?: string }> {
   const form = new FormData();
   form.append("file", file);
-  form.append("user_id", userId);
+  form.append("user_id", userId ?? getCurrentUserId());
   let res: Response;
   try {
     res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
