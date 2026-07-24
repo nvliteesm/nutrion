@@ -24,8 +24,23 @@ interface DashboardData {
   entries: IntakeEntry[];
 }
 
+/** Fetch the proactive AI daily insight from the backend. */
+async function fetchAIInsight(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/ai/insights/daily?user_id=default", {
+      method: "POST",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.body || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function TodayPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -34,6 +49,10 @@ export default function TodayPage() {
         if (active) setData({ user, totals, entries });
       },
     );
+    // Fetch the real AI insight in parallel (non-blocking).
+    fetchAIInsight().then((text) => {
+      if (active) setAiInsight(text);
+    });
     return () => {
       active = false;
     };
@@ -78,7 +97,7 @@ export default function TodayPage() {
       <div className="grid gap-4 md:grid-cols-[1.5fr_1fr] md:gap-[18px]">
         <RecentEntries entries={entries} />
         <InsightCard
-          insight={dailyInsight(totals, user.targets)}
+          insight={aiInsight ?? dailyInsight(totals, user.targets)}
           confirmedCount={totals.confirmedCount}
         />
       </div>

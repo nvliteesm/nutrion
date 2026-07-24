@@ -144,6 +144,7 @@ export default function ScanPage() {
   const [drink, setDrink] = useState<DrinkLabelData | null>(null);
   const [food, setFood] = useState<FoodAnalysisData | null>(null);
   const [metrics, setMetrics] = useState<MedicalMetricData[]>([]);
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
 
   const activeMode = useMemo(
     () => modes.find((m) => m.id === mode) ?? null,
@@ -173,6 +174,7 @@ export default function ScanPage() {
     setDrink(null);
     setFood(null);
     setMetrics([]);
+    setAiSuggestion(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -243,6 +245,21 @@ export default function ScanPage() {
         setSavedId(`report #${res.report_id ?? res.metric_ids[0]}`);
       }
       setStep("done");
+      // Proactive AI: suggest a healthier alternative (non-blocking).
+      const itemName = mode === "drink" ? drink?.product_name : food?.items?.[0]?.name;
+      if (itemName && mode !== "medical") {
+        fetch("/api/ai/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: `I just logged "${itemName}". What's a lower-sugar alternative I could try next time? Keep it to 1-2 sentences.`,
+            user_id: "default",
+          }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => { if (d?.answer) setAiSuggestion(d.answer); })
+          .catch(() => {});
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Confirm failed. Try again.");
     } finally {
@@ -721,6 +738,24 @@ export default function ScanPage() {
           <p className="text-sm text-ink-2">
             Stored {savedId}. Only confirmed values feed your daily totals.
           </p>
+
+          {aiSuggestion && (
+            <div className="rounded-card bg-teal-t px-4 py-3 text-left">
+              <div className="mb-1 text-[10.5px] font-bold tracking-wide text-teal-d">
+                AI SUGGESTION
+              </div>
+              <p className="text-[13px] font-medium leading-relaxed text-ink">
+                {aiSuggestion}
+              </p>
+            </div>
+          )}
+          {!aiSuggestion && mode !== "medical" && (
+            <div className="flex items-center justify-center gap-2 py-2 text-[12px] font-medium text-ink-3">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-teal" />
+              Getting a suggestion…
+            </div>
+          )}
+
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button fullWidth onClick={() => router.push("/today")}>
               Go to Today
