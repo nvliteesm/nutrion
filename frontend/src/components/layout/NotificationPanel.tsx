@@ -5,10 +5,12 @@ import { BellIcon, XIcon } from "@/components/icons";
 import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/format";
+import { getTodayTotals } from "@/lib/api";
 import {
   getNotifications,
   markAllRead,
   markRead,
+  refreshNotifications,
   unreadCount,
   type AppNotification,
   type NotifKind,
@@ -20,8 +22,7 @@ const kindTone: Record<NotifKind, string> = {
   hydration: "bg-blue-t text-blue-d",
   sugar_warning: "bg-amber-t text-amber-d",
   daily_summary: "bg-navy/[0.06] text-navy",
-  weekly_summary: "bg-navy/[0.06] text-navy",
-  report_ready: "bg-teal-t text-teal-d",
+  welcome: "bg-teal-t text-teal-d",
 };
 
 export function NotificationBell() {
@@ -29,13 +30,21 @@ export function NotificationBell() {
   const [count, setCount] = useState(0);
   const [notifs, setNotifs] = useState<AppNotification[]>([]);
 
+  // Refresh notifications from real data on mount.
   useEffect(() => {
-    setCount(unreadCount());
+    getTodayTotals().then((totals) => {
+      refreshNotifications(totals);
+      setCount(unreadCount());
+    });
   }, []);
 
   function openPanel() {
-    setNotifs(getNotifications());
-    setOpen(true);
+    // Re-generate from latest data when opening.
+    getTodayTotals().then((totals) => {
+      const fresh = refreshNotifications(totals);
+      setNotifs(fresh);
+      setOpen(true);
+    });
   }
 
   function handleClose() {
@@ -112,9 +121,6 @@ export function NotificationBell() {
                         <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-ink-2">
                           {n.body}
                         </p>
-                        <span className="mt-1 text-[10.5px] font-medium text-ink-3">
-                          {formatTime(n.createdAt)}
-                        </span>
                       </div>
                     </li>
                   ))}

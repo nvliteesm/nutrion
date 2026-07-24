@@ -1,16 +1,6 @@
 import { getToday } from "./date";
-
-function yesterday(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function daysAgoStr(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { DEFAULT_TARGETS } from "./types";
+import type { DailyTotals } from "./types";
 
 export type NotifKind =
   | "meal_reminder"
@@ -18,8 +8,7 @@ export type NotifKind =
   | "hydration"
   | "sugar_warning"
   | "daily_summary"
-  | "weekly_summary"
-  | "report_ready";
+  | "welcome";
 
 export interface AppNotification {
   id: string;
@@ -30,7 +19,7 @@ export interface AppNotification {
   read: boolean;
 }
 
-const NOTIFS_KEY = "nutrion.notifications";
+const NOTIFS_KEY = "nutrion.notifications.v2";
 
 function read(): AppNotification[] | null {
   if (typeof window === "undefined") return null;
@@ -49,58 +38,102 @@ function write(notifs: AppNotification[]): void {
   }
 }
 
-function seedNotifications(): AppNotification[] {
+/**
+ * Generate notifications dynamically from today's actual totals.
+ * No hardcoded numbers — only real data-driven alerts.
+ */
+function generateFromTotals(totals: DailyTotals | null): AppNotification[] {
   const today = getToday();
-  return [
-    {
-      id: "n1",
-      title: "Sugar target approaching",
-      body: "You've reached 80% of today's added-sugar target. Approximately 8 g remains.",
+  const now = new Date().toISOString();
+  const notifs: AppNotification[] = [];
+
+  if (!totals || totals.entryCount === 0) {
+    // No entries yet today — show a friendly reminder.
+    notifs.push({
+      id: `${today}_welcome`,
+      title: "Ready to track?",
+      body: "No entries logged yet today. Scan a drink label or log a meal when you're ready.",
+      kind: "welcome",
+      createdAt: now,
+      read: false,
+    });
+    return notifs;
+  }
+
+  const targets = DEFAULT_TARGETS;
+
+  // Sugar approaching target (80%+)
+  const sugarRatio = totals.totalSugar_g / targets.sugar_g;
+  if (sugarRatio >= 1) {
+    const over = Math.round(totals.totalSugar_g - targets.sugar_g);
+    notifs.push({
+      id: `${today}_sugar_over`,
+      title: "Sugar target reached",
+      body: `You're ${over} g over your ${targets.sugar_g} g sugar target today. An unsweetened option next time keeps things balanced.`,
       kind: "sugar_warning",
-      createdAt: `${today}T14:30:00`,
+      createdAt: now,
       read: false,
-    },
-    {
-      id: "n2",
+    });
+  } else if (sugarRatio >= 0.8) {
+    const left = Math.round(targets.sugar_g - totals.totalSugar_g);
+    notifs.push({
+      id: `${today}_sugar_80`,
+      title: "Sugar target approaching",
+      body: `You've reached 80% of today's sugar target. Approximately ${left} g remains.`,
+      kind: "sugar_warning",
+      createdAt: now,
+      read: false,
+    });
+  }
+
+  // Hydration reminder
+  if (totals.water_cups < targets.water_cups) {
+    const toGo = targets.water_cups - totals.water_cups;
+    notifs.push({
+      id: `${today}_hydration`,
       title: "Hydration reminder",
-      body: "You've logged 4 cups today — 4 more to reach your goal. Time for a glass?",
+      body: `You've logged ${totals.water_cups} cups today — ${toGo} more to reach your goal.`,
       kind: "hydration",
-      createdAt: `${today}T13:00:00`,
+      createdAt: now,
       read: false,
-    },
-    {
-      id: "n3",
-      title: "Log your lunch",
-      body: "It's past noon — have you eaten? Scan or log when you're ready.",
-      kind: "meal_reminder",
-      createdAt: `${today}T12:15:00`,
-      read: true,
-    },
-    {
-      id: "n4",
-      title: "Yesterday's summary",
-      body: "You stayed within target yesterday — 1,870 kcal, 36 g added sugar. Nice one.",
+    });
+  }
+
+  // Calorie info
+  if (totals.calories > targets.calories) {
+    notifs.push({
+      id: `${today}_cal_over`,
+      title: "Calorie target reached",
+      body: `You've logged ${Math.round(totals.calories)} kcal today (target ${targets.calories}). Return to your usual target tomorrow.`,
       kind: "daily_summary",
-      createdAt: `${yesterday()}T21:00:00`,
-      read: true,
-    },
-    {
-      id: "n5",
-      title: "Weekly summary",
-      body: "Last week: avg 1,817 kcal/day, 31 g added sugar, 5 of 7 days within target.",
-      kind: "weekly_summary",
-      createdAt: `${daysAgoStr(3)}T09:00:00`,
-      read: true,
-    },
-  ];
+      createdAt: now,
+      read: false,
+    });
+  }
+
+  if (notifs.length === 0) {
+    notifs.push({
+      id: `${today}_ontrack`,
+      title: "Looking good",
+      body: `${totals.entryCount} entries logged today, all within target. Keep it up.`,
+      kind: "daily_summary",
+      createdAt: now,
+      read: false,
+    });
+  }
+
+  return notifs;
+}
+
+/** Refresh notifications from real today's data. */
+export function refreshNotifications(totals: DailyTotals | null): AppNotification[] {
+  const generated = generateFromTotals(totals);
+  write(generated);
+  return generated;
 }
 
 export function getNotifications(): AppNotification[] {
-  const stored = read();
-  if (stored) return stored;
-  const seed = seedNotifications();
-  write(seed);
-  return seed;
+  return read() ?? [];
 }
 
 export function markAllRead(): void {
