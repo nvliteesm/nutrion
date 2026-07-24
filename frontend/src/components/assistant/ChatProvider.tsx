@@ -7,23 +7,20 @@ import {
   useEffect,
   useState,
 } from "react";
-import { getAllEntries } from "@/lib/api";
 import { getStoredSession } from "@/lib/auth";
-import { getToday } from "@/lib/date";
-import { DEFAULT_TARGETS } from "@/lib/types";
 import {
-  answerQuestion,
+  askBackend,
   greetingMessage,
+  loadingMessage,
   type AssistantMessage,
 } from "@/lib/assistant";
-import type { IntakeEntry, Subscription } from "@/lib/types";
+import type { Subscription } from "@/lib/types";
 
 interface ChatContextValue {
   messages: AssistantMessage[];
   ask: (question: string) => void;
   reset: () => void;
   subscription: Subscription | null;
-  /** Mini widget open/closed state. */
   widgetOpen: boolean;
   setWidgetOpen: (open: boolean) => void;
 }
@@ -48,32 +45,39 @@ function loadMessages(): AssistantMessage[] {
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<AssistantMessage[]>([greetingMessage()]);
-  const [entries, setEntries] = useState<IntakeEntry[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [widgetOpen, setWidgetOpen] = useState(false);
 
   useEffect(() => {
     setMessages(loadMessages());
     setSubscription(getStoredSession()?.subscription ?? "free");
-    getAllEntries().then(setEntries);
   }, []);
 
   // Persist conversation so it survives navigation between mini and full view.
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      // Don't persist loading messages.
+      const toSave = messages.filter((m) => !m.loading);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     }
   }, [messages]);
 
-  const ask = useCallback(
-    (question: string) => {
-      const trimmed = question.trim();
-      if (!trimmed) return;
-      const answer = answerQuestion(trimmed, entries, DEFAULT_TARGETS, getToday());
-      setMessages((m) => [...m, { role: "user", text: trimmed }, answer]);
-    },
-    [entries],
-  );
+  const ask = useCallback((question: string) => {
+    const trimmed = question.trim();
+    if (!trimmed) return;
+
+    // Add user message + a loading placeholder.
+    setMessages((m) => [...m, { role: "user", text: trimmed }, loadingMessage()]);
+
+    // Call the real backend AI.
+    askBackend(trimmed).then((answer) => {
+      setMessages((m) => {
+        // Replace the loading placeholder with the real answer.
+        const withoutLoading = m.filter((msg) => !msg.loading);
+        return [...withoutLoading, answer];
+      });
+    });
+  }, []);
 
   const reset = useCallback(() => {
     setMessages([greetingMessage()]);

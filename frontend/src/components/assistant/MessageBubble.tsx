@@ -22,6 +22,18 @@ export function MessageBubble({
     );
   }
 
+  if (message.loading) {
+    return (
+      <div className="max-w-[88%] self-start rounded-[16px] rounded-bl-[4px] bg-card p-3.5 shadow-card ring-1 ring-line">
+        <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-teal" />
+          <span className="h-2 w-2 animate-pulse rounded-full bg-teal [animation-delay:150ms]" />
+          <span className="h-2 w-2 animate-pulse rounded-full bg-teal [animation-delay:300ms]" />
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`max-w-[88%] self-start rounded-[16px] rounded-bl-[4px] bg-card p-3.5 shadow-card ring-1 ring-line ${
