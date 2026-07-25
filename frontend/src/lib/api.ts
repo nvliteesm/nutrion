@@ -35,7 +35,9 @@ import type {
 function analyzeApiBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "");
   if (fromEnv) return fromEnv;
-  if (typeof window !== "undefined") return "http://127.0.0.1:8000";
+  // On Vercel, frontend and backend share the same domain via routes.
+  // In local dev, Next.js rewrites handle the proxy.
+  // Either way, relative paths ("/api/...") work.
   return "";
 }
 

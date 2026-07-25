@@ -1,20 +1,43 @@
 {
-  "version": 2,
-  "builds": [
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "root": "backend",
+      "framework": "fastapi",
+      "entrypoint": "app.main:app"
+    }
+  },
+  "rewrites": [
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/next"
+      "source": "/api/(.*)",
+      "destination": { "type": "service", "service": "backend" }
     },
     {
-      "src": "backend/app/main.py",
-      "use": "@vercel/python"
+      "source": "/intakes(.*)",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/memory/(.*)",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/health",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/chat",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/(.*)",
+      "destination": { "type": "service", "service": "frontend" }
     }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "backend/app/main.py" },
-    { "src": "/intakes(.*)", "dest": "backend/app/main.py" },
-    { "src": "/memory/(.*)", "dest": "backend/app/main.py" },
-    { "src": "/health", "dest": "backend/app/main.py" },
-    { "src": "/(.*)", "dest": "frontend/$1" }
   ]
 }

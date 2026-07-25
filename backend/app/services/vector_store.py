@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
-import chromadb
-from chromadb.api.models.Collection import Collection
-from chromadb.errors import InvalidDimensionException
+try:
+    import chromadb
+    from chromadb.api.models.Collection import Collection
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    chromadb = None  # type: ignore
+    Collection = None  # type: ignore
+    CHROMADB_AVAILABLE = False
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +21,8 @@ from app.config import settings
 from app.models.orm import Intake
 from app.models.schemas import ExtractedMeal
 from app.services.foundry import foundry
+
+logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "meal_memory"
 # Water sips are too repetitive for semantic meal memory.
@@ -33,14 +42,22 @@ def _intake_document(row: Intake) -> str:
 
 class VectorStore:
     def __init__(self) -> None:
-        self._client = chromadb.PersistentClient(path=settings.chroma_path)
-        self._collection: Collection = self._client.get_or_create_collection(
-            name=COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
+        self._client = None
+        self._collection = None
+        if not CHROMADB_AVAILABLE:
+            logger.warning("chromadb not installed — vector store disabled (stub mode)")
+            return
+        try:
+            self._client = chromadb.PersistentClient(path=settings.chroma_path)
+            self._collection = self._client.get_or_create_collection(
+                name=COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"},
+            )
+        except Exception:
+            logger.exception("Failed to initialize ChromaDB — vector store disabled")
 
     @property
-    def collection(self) -> Collection:
+    def collection(self):
         return self._collection
 
     def reset_collection(self) -> None:
