@@ -55,6 +55,16 @@ export async function apiAuthHeaders(
  */
 function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
   const base = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "");
+  const isLocalBackend =
+    base?.startsWith("http://localhost") ||
+    base?.startsWith("http://127.0.0.1");
+  const isLocalPage =
+    typeof window === "undefined" ||
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+  if (base && isLocalBackend && !isLocalPage) {
+    return input;
+  }
   if (base && typeof input === "string" && input.startsWith("/")) {
     return `${base}${input}`;
   }

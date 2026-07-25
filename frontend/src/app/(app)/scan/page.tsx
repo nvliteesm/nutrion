@@ -405,7 +405,7 @@ export default function ScanPage() {
           .catch(() => {});
       }
       // Auto-send Telegram notification after every confirm (non-blocking).
-      fetch("/api/telegram/send-summary", {
+      apiFetch("/api/telegram/send-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: "1176087052", user_id: getCurrentUserId() }),

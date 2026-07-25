@@ -14,6 +14,7 @@ import {
 import { getStoredSession, logout, type Session } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { calculateSugarBarrier, listMedicalReports } from "@/lib/api";
+import { apiFetch } from "@/lib/apiFetch";
 import {
   applyIntakeTargets,
   getStoredProfile,
@@ -366,7 +367,7 @@ function TelegramButton() {
     setSending(true);
     try {
       const userId = getStoredSession()?.userId ?? "default";
-      const res = await fetch("/api/telegram/send-summary", {
+      const res = await apiFetch("/api/telegram/send-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: "1176087052", user_id: userId }),
