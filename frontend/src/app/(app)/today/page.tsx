@@ -17,7 +17,7 @@ import type {
   MedicalReportSummary,
   UserProfile,
 } from "@/lib/types";
-import { FlameIcon, PlusIcon } from "@/components/icons";
+import { FlameIcon } from "@/components/icons";
 import { DashboardSkeleton } from "@/components/today/DashboardSkeleton";
 import { SugarCard } from "@/components/today/SugarCard";
 import { HydrationCard } from "@/components/today/HydrationCard";
@@ -25,7 +25,6 @@ import { QuickActions } from "@/components/today/QuickActions";
 import { MonthCalendar } from "@/components/history/MonthCalendar";
 import { DayDetail } from "@/components/history/DayDetail";
 import { EntryDetailModal } from "@/components/history/EntryDetailModal";
-import { LogEntrySheet } from "@/components/layout/LogEntrySheet";
 
 interface DashboardData {
   user: UserProfile;
@@ -43,7 +42,6 @@ function reportDateKey(report: MedicalReportSummary): string {
 export default function TodayPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<IntakeEntry | null>(null);
-  const [logOpen, setLogOpen] = useState(false);
   const todayIso = getToday();
   const [ty, tm] = [
     Number(todayIso.slice(0, 4)),
@@ -153,23 +151,10 @@ export default function TodayPage() {
               : ` · ${todayEntries.filter((e) => e.type !== "water").length} entries today`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-[11px] bg-card px-3 py-2 text-[12px] font-bold text-amber-d shadow-card">
-            <FlameIcon size={14} />
-            {computedStreak}-day streak
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-              setLogOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-[11px] bg-teal px-3.5 py-2 text-[12.5px] font-bold text-navy-ink transition hover:bg-teal-d"
-          >
-            <PlusIcon size={14} />
-            Log entry
-          </button>
-        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-[11px] bg-card px-3 py-2 text-[12px] font-bold text-amber-d shadow-card">
+          <FlameIcon size={14} />
+          {computedStreak}-day streak
+        </span>
       </header>
 
       <div className="grid items-stretch gap-4 md:grid-cols-2 md:gap-5">
@@ -222,8 +207,6 @@ export default function TodayPage() {
           onChanged={refresh}
         />
       )}
-
-      <LogEntrySheet open={logOpen} onClose={() => setLogOpen(false)} />
     </div>
   );
 }
