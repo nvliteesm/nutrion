@@ -12,6 +12,7 @@ from app.models.schemas import (
     ExtractedMeal,
     IntakeNutrientPatch,
     IntakeRecord,
+    NutrientValues,
 )
 
 
