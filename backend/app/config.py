@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     app_name: str = "Nutrion API"
     debug: bool = True
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    cors_origin_regex: str = r"https://.*\.vercel\.app"
 
     # Prefer DATABASE_URL. Supabase: Project Settings → Database → URI
     database_url: str = DEFAULT_SQLITE_URL
@@ -150,6 +151,11 @@ class Settings(BaseSettings):
     @property
     def origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def origin_regex(self) -> str | None:
+        value = self.cors_origin_regex.strip()
+        return value or None
 
     @property
     def is_sqlite(self) -> bool:
