@@ -365,10 +365,11 @@ function TelegramButton() {
   async function sendSummary() {
     setSending(true);
     try {
+      const userId = getStoredSession()?.userId ?? "default";
       const res = await fetch("/api/telegram/send-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: "1176087052", user_id: session?.userId ?? "default" }),
+        body: JSON.stringify({ chat_id: "1176087052", user_id: userId }),
       });
       if (res.ok) {
         setSent(true);

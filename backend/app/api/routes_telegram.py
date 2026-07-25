@@ -66,8 +66,7 @@ async def send_daily_summary(
         f"🍬 Sugar: *{t.sugar_g:.1f} g*\n"
         f"🥩 Protein: *{t.protein_g:.1f} g*\n"
         f"🍞 Carbs: *{t.carbs_g:.1f} g*\n"
-        f"🧈 Fat: *{t.fat_g:.1f} g*\n"
-        f"📊 Meals logged: *{summary.meal_count}*\n\n"
+        f"🧈 Fat: *{t.fat_g:.1f} g*\n\n"
         "_NutriON — nutrition tracking & educational insights._"
     )
 

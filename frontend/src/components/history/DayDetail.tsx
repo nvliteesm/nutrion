@@ -95,7 +95,7 @@ export function DayDetail({
       ) : (
         <>
           {totals.entryCount > 0 && (
-            <div className="my-3 grid shrink-0 grid-cols-2 gap-2">
+            <div className="my-3 grid shrink-0 grid-cols-3 gap-2">
               <Metric
                 label="Calories"
                 value={formatNumber(totals.calories)}
@@ -119,6 +119,16 @@ export function DayDetail({
                 accent={
                   sugarAccent[sugarBand(totals.totalSugar_g, targets.sugar_g)]
                 }
+              />
+              <Metric
+                label="Carbs"
+                value={`${totals.carbs_g}`}
+                sub="g"
+              />
+              <Metric
+                label="Fat"
+                value={`${totals.fat_g}`}
+                sub="g"
               />
             </div>
           )}
