@@ -6,8 +6,11 @@
       "use": "@vercel/next"
     },
     {
-      "src": "backend/app/main.py",
-      "use": "@vercel/python"
+      "src": "backend/requirements.txt",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
     }
   ],
   "routes": [
@@ -15,6 +18,8 @@
     { "src": "/intakes(.*)", "dest": "backend/app/main.py" },
     { "src": "/memory/(.*)", "dest": "backend/app/main.py" },
     { "src": "/health", "dest": "backend/app/main.py" },
+    { "src": "/chat", "dest": "backend/app/main.py" },
+    { "src": "/uploads/(.*)", "dest": "backend/app/main.py" },
     { "src": "/(.*)", "dest": "frontend/$1" }
   ]
 }

@@ -11,4 +11,3 @@ pillow==11.1.0
 pypdf==5.1.0
 python-dateutil==2.9.0.post0
 apscheduler==3.10.4
-chromadb>=1.0.0
