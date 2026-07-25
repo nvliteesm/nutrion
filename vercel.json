@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "backend/app/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "backend/app/main.py" },
+    { "src": "/intakes(.*)", "dest": "backend/app/main.py" },
+    { "src": "/memory/(.*)", "dest": "backend/app/main.py" },
+    { "src": "/health", "dest": "backend/app/main.py" },
+    { "src": "/(.*)", "dest": "frontend/$1" }
+  ]
+}
