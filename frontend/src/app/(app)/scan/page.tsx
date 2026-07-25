@@ -295,10 +295,10 @@ export default function ScanPage() {
     setError(null);
   }
 
-  async function runAnalyze(file: File) {
+  async function runAnalyze(file: File, fromCamera = false) {
     if (!mode) return;
 
-    setBusy(true);
+    if (!fromCamera) setBusy(true);
     setError(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     if (file.type.startsWith("image/")) {
@@ -321,16 +321,20 @@ export default function ScanPage() {
         setAnalysisId(res.analysis_id);
         setMetrics(res.metrics);
       }
+      setCameraOpen(false);
       setStep("review");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Analyze failed";
       const withRetry = /try again/i.test(msg)
         ? msg
         : `${msg}${msg.endsWith(".") ? "" : "."} Please try again.`;
+      if (fromCamera) {
+        throw err instanceof Error ? err : new Error(withRetry);
+      }
       setError(`${activeMode?.title ?? "Scan"}: ${withRetry}`);
       if (fileRef.current) fileRef.current.value = "";
     } finally {
-      setBusy(false);
+      if (!fromCamera) setBusy(false);
     }
   }
 
@@ -340,8 +344,7 @@ export default function ScanPage() {
   }
 
   function handleCameraCapture(file: File) {
-    setCameraOpen(false);
-    void runAnalyze(file);
+    return runAnalyze(file, true);
   }
 
   async function onConfirm() {

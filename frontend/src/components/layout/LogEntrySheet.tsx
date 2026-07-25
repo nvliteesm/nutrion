@@ -94,9 +94,11 @@ export function LogEntrySheet({
     onClose();
   }
 
-  async function runAnalyze(kind: Kind, file: File) {
-    setBusy(true);
-    setExpanded(null);
+  async function runAnalyze(kind: Kind, file: File, fromCamera = false) {
+    if (!fromCamera) {
+      setBusy(true);
+      setExpanded(null);
+    }
     setError(null);
     try {
       await analyzeAndResume(kind, file);
@@ -106,9 +108,9 @@ export function LogEntrySheet({
       router.push(`/scan?mode=${kind}&resume=1`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Analyze failed";
+      if (fromCamera) throw err instanceof Error ? err : new Error(msg);
       setError(msg);
       setBusy(false);
-      setCameraFor(null);
       setGalleryFor(null);
       if (fileRef.current) fileRef.current.value = "";
     }
@@ -296,7 +298,7 @@ export function LogEntrySheet({
                 ? "Scan food"
                 : "Medical report"
           }
-          onCapture={(file) => void runAnalyze(cameraFor, file)}
+          onCapture={(file) => runAnalyze(cameraFor, file, true)}
           onClose={() => setCameraFor(null)}
         />
       )}

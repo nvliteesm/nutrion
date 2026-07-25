@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getStoredSession, type Session } from "@/lib/auth";
-<<<<<<< Updated upstream
-=======
 import { getAllEntries } from "@/lib/api";
->>>>>>> Stashed changes
 import { localDayKey } from "@/lib/date";
 import { FlameIcon, PlusIcon } from "@/components/icons";
 import { Logo } from "./Logo";
@@ -14,17 +11,9 @@ import { NotificationBell } from "./NotificationPanel";
 
 async function fetchStreak(): Promise<number> {
   try {
-<<<<<<< Updated upstream
-    const res = await fetch("/intakes?limit=300");
-    if (!res.ok) return 0;
-    const rows = (await res.json()) as { logged_at: string }[];
-    if (!Array.isArray(rows) || rows.length === 0) return 0;
-    const days = new Set(rows.map((r) => localDayKey(r.logged_at)));
-=======
     const rows = await getAllEntries();
     if (rows.length === 0) return 0;
     const days = new Set(rows.map((r) => localDayKey(r.loggedAt)));
->>>>>>> Stashed changes
     let streak = 0;
     const d = new Date();
     while (true) {

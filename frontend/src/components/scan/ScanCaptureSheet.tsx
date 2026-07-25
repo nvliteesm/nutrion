@@ -65,20 +65,23 @@ export function ScanCaptureSheet({
       ? "Scan a label or bottle with camera or gallery"
       : "Snap or upload a meal for an AI estimate";
 
-  async function run(file: File) {
+  async function run(file: File, fromCamera = false) {
     if (!kind) return;
-    setBusy(true);
+    if (!fromCamera) setBusy(true);
     setError(null);
     try {
       await analyzeAndResume(kind, file);
+      setCameraOpen(false);
       onClose();
       router.push(`/scan?mode=${kind}&resume=1`);
     } catch (err) {
+      if (fromCamera) throw err;
       setError(err instanceof Error ? err.message : "Analyze failed");
     } finally {
-      setBusy(false);
-      setCameraOpen(false);
-      if (fileRef.current) fileRef.current.value = "";
+      if (!fromCamera) {
+        setBusy(false);
+        if (fileRef.current) fileRef.current.value = "";
+      }
     }
   }
 
@@ -179,7 +182,7 @@ export function ScanCaptureSheet({
       {cameraOpen && (
         <CameraCapture
           title={title}
-          onCapture={(file) => void run(file)}
+          onCapture={(file) => run(file, true)}
           onClose={() => setCameraOpen(false)}
         />
       )}

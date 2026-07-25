@@ -193,7 +193,6 @@ export function DayDetail({
               >
                 <ul>
                   {nonWater.map((entry, i) => {
-                    const Icon = entry.type === "drink" ? CupIcon : UtensilsIcon;
                     return (
                       <li key={entry.id}>
                         <button
@@ -204,16 +203,7 @@ export function DayDetail({
                             i < nonWater.length - 1 ? "border-b border-line" : "",
                           )}
                         >
-                          <span
-                            className={cn(
-                              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px]",
-                              entry.type === "drink"
-                                ? "bg-blue-t text-blue-d"
-                                : "bg-teal-t text-teal-d",
-                            )}
-                          >
-                            <Icon size={15} />
-                          </span>
+                          <EntryThumb entry={entry} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="truncate text-[12.5px] font-semibold text-ink">
@@ -244,6 +234,35 @@ export function DayDetail({
         </>
       )}
     </Card>
+  );
+}
+
+/** Icon-sized leading thumb — photo when saved, else type icon. */
+function EntryThumb({ entry }: { entry: IntakeEntry }) {
+  const Icon = entry.type === "drink" ? CupIcon : UtensilsIcon;
+  const tone =
+    entry.type === "drink" ? "bg-blue-t text-blue-d" : "bg-teal-t text-teal-d";
+
+  if (entry.imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={entry.imageUrl}
+        alt=""
+        className="h-8 w-8 shrink-0 rounded-[10px] object-cover"
+      />
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px]",
+        tone,
+      )}
+    >
+      <Icon size={15} />
+    </span>
   );
 }
 
