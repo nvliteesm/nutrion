@@ -400,6 +400,12 @@ export default function ScanPage() {
           .then((d) => { if (d?.answer) setAiSuggestion(d.answer); })
           .catch(() => {});
       }
+      // Auto-send Telegram notification after every confirm (non-blocking).
+      fetch("/api/telegram/send-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: "1176087052", user_id: "default" }),
+      }).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Confirm failed. Try again.");
     } finally {

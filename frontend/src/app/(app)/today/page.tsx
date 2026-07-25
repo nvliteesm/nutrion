@@ -112,6 +112,21 @@ export default function TodayPage() {
   const { user, totals, todayEntries } = data;
   const ml = waterMl(todayEntries);
 
+  // Compute real streak from all entries grouped by day.
+  let computedStreak = 0;
+  {
+    const d = new Date();
+    while (true) {
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (byDate.has(key)) {
+        computedStreak += 1;
+        d.setDate(d.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+  }
+
   function stepMonth(delta: number) {
     setCursor((c) => {
       const d = new Date(c.year, c.month0 + delta, 1);
@@ -136,7 +151,7 @@ export default function TodayPage() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-[11px] bg-card px-3 py-2 text-[12px] font-bold text-amber-d shadow-card">
             <FlameIcon size={14} />
-            {user.streakDays}-day streak
+            {computedStreak}-day streak
           </span>
           <button
             type="button"
