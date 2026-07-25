@@ -260,7 +260,9 @@ export default function ScanPage() {
       router.push("/medical");
       return;
     }
-    router.push("/today");
+    // Force a fresh data fetch when landing on Today (bypasses Next.js cache).
+    router.push("/today?t=" + Date.now());
+    router.refresh();
   }
 
   /** Clear result and log another of the same type (stay on upload). */

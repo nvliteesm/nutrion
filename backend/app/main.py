@@ -8,6 +8,7 @@ from app.api.routes import api, router
 from app.api.routes_ai import router as ai_router
 from app.api.routes_analytics import router as analytics_router
 from app.api.routes_memory_chat import router as memory_chat_router
+from app.api.routes_telegram import router as telegram_router
 from app.config import settings
 from app.db import init_db
 
@@ -60,6 +61,7 @@ app.include_router(api)
 app.include_router(memory_chat_router)
 app.include_router(analytics_router)
 app.include_router(ai_router)
+app.include_router(telegram_router)
 
 
 @app.get("/")

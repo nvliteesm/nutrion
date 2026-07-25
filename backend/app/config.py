@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     kimi_base_url: str = "https://api.moonshot.ai/v1"
     kimi_vision_model: str = "kimi-k3"
 
+    # Telegram bot
+    telegram_bot_token: str = ""
+
     use_live_ai: bool = True
     allow_stub_embeddings: bool = True
     rag_top_k: int = 5

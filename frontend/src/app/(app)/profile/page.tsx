@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Button, Card, useToast } from "@/components/ui";
 import { Field } from "@/components/auth/Field";
 import {
   CheckIcon,
@@ -327,6 +327,19 @@ export default function ProfilePage() {
         </div>
       </Card>
 
+      {/* Telegram */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[14px] font-bold text-ink">Telegram</div>
+            <div className="text-[12px] font-medium text-ink-3">
+              Receive daily nutrition summaries
+            </div>
+          </div>
+          <TelegramButton />
+        </div>
+      </Card>
+
       <Card className="p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -341,6 +354,39 @@ export default function ProfilePage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+function TelegramButton() {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const { toast } = useToast();
+
+  async function sendSummary() {
+    setSending(true);
+    try {
+      const res = await fetch("/api/telegram/send-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: "1176087052", user_id: "default" }),
+      });
+      if (res.ok) {
+        setSent(true);
+        toast({ title: "Sent!", description: "Daily summary sent to Telegram", variant: "success" });
+      } else {
+        toast({ title: "Failed", description: "Couldn't send. Try again.", variant: "error" });
+      }
+    } catch {
+      toast({ title: "Offline", description: "Backend unreachable", variant: "error" });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Button variant="outline" onClick={sendSummary} disabled={sending || sent}>
+      {sent ? "Sent ✓" : sending ? "Sending…" : "Send summary"}
+    </Button>
   );
 }
 
