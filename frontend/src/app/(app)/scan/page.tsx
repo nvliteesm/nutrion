@@ -404,7 +404,7 @@ export default function ScanPage() {
       fetch("/api/telegram/send-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: "1176087052", user_id: "default" }),
+        body: JSON.stringify({ chat_id: "1176087052", user_id: getCurrentUserId() }),
       }).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Confirm failed. Try again.");

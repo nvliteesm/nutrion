@@ -368,7 +368,7 @@ function TelegramButton() {
       const res = await fetch("/api/telegram/send-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: "1176087052", user_id: "default" }),
+        body: JSON.stringify({ chat_id: "1176087052", user_id: session?.userId ?? "default" }),
       });
       if (res.ok) {
         setSent(true);
