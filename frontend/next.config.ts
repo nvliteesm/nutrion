@@ -25,6 +25,14 @@ const nextConfig: NextConfig = {
         destination: `${BACKEND_URL}/memory/:path*`,
       },
       {
+        source: "/totals/:path*",
+        destination: `${BACKEND_URL}/totals/:path*`,
+      },
+      {
+        source: "/chat",
+        destination: `${BACKEND_URL}/chat`,
+      },
+      {
         source: "/health",
         destination: `${BACKEND_URL}/health`,
       },

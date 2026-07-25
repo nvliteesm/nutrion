@@ -12,6 +12,7 @@ import {
   confirmMedical,
 } from "@/lib/api";
 import { getCurrentUserId } from "@/lib/auth";
+import { apiFetch } from "@/lib/apiFetch";
 import { cn } from "@/lib/cn";
 import { applyIntakeTargets, getStoredProfile } from "@/lib/profile";
 import { SCAN_RESUME_KEY } from "@/components/scan/ScanCaptureSheet";
@@ -388,7 +389,7 @@ export default function ScanPage() {
       // Proactive AI: suggest a healthier alternative (non-blocking).
       const itemName = mode === "drink" ? drink?.product_name : food?.items?.[0]?.name;
       if (itemName && mode !== "medical") {
-        fetch("/api/ai/analyze", {
+        apiFetch("/api/ai/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

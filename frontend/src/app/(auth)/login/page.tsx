@@ -1,24 +1,30 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthError, getStoredSession, login } from "@/lib/auth";
 import { Button, Card } from "@/components/ui";
 import { Field } from "@/components/auth/Field";
+import { AuthDivider, GoogleButton } from "@/components/auth/GoogleButton";
 import { AlertTriangleIcon } from "@/components/icons";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("maya@example.com");
   const [password, setPassword] = useState("demo1234");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Already signed in? Skip straight to the app.
   useEffect(() => {
     if (getStoredSession()) router.replace("/today");
   }, [router]);
+
+  useEffect(() => {
+    const oauthError = searchParams.get("error");
+    if (oauthError) setError(oauthError);
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -26,7 +32,10 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
-      router.replace("/today");
+      const next = searchParams.get("next");
+      const dest =
+        next && next.startsWith("/") && !next.startsWith("//") ? next : "/today";
+      router.replace(dest);
     } catch (err) {
       setError(
         err instanceof AuthError ? err.message : "Something went wrong. Try again.",
@@ -44,7 +53,12 @@ export default function LoginPage() {
         Log in to keep tracking your nutrition.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
+      <div className="mt-5 flex flex-col gap-4">
+        <GoogleButton onError={setError} />
+        <AuthDivider />
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-1 flex flex-col gap-4">
         <Field
           label="Email"
           name="email"
@@ -91,5 +105,13 @@ export default function LoginPage() {
         Password: demo1234
       </div>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

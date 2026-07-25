@@ -3,6 +3,7 @@ import { deleteEntry, getEntries, updateEntry } from "./store";
 import { buildDailyTotals } from "./nutrition";
 import { getStoredProfile } from "./profile";
 import { getCurrentUserId, getStoredSession } from "./auth";
+import { apiFetch } from "./apiFetch";
 import type {
   Confidence,
   DailyTotals,
@@ -46,6 +47,7 @@ function analyzeUrl(path: string): string {
 /** Shape of a backend IntakeRecord. */
 interface BackendIntake {
   id: number;
+  user_id?: string;
   kind: string;
   name: string;
   serving?: string;
@@ -104,6 +106,7 @@ function adaptBackendIntake(r: BackendIntake): IntakeEntry {
   };
   return {
     id: `be_${r.id}`,
+    userId: r.user_id || getCurrentUserId(),
     type,
     name: r.name,
     loggedAt: r.logged_at,
@@ -124,7 +127,7 @@ async function fetchBackendEntries(): Promise<IntakeEntry[]> {
       user_id: userId,
       limit: "300",
     });
-    const res = await fetch(`/intakes?${q}`);
+    const res = await apiFetch(`/intakes?${q}`);
     if (!res.ok) return [];
     const rows = (await res.json()) as BackendIntake[];
     if (!Array.isArray(rows)) return [];
@@ -134,13 +137,21 @@ async function fetchBackendEntries(): Promise<IntakeEntry[]> {
   }
 }
 
+/** In-flight / short-lived cache so Today + TopNav don't triple-hit /intakes. */
+let entriesInflight: Promise<IntakeEntry[]> | null = null;
+let entriesCache: { userId: string; at: number; rows: IntakeEntry[] } | null =
+  null;
+const ENTRIES_TTL_MS = 2500;
+
 function mergeEntries(
   backend: IntakeEntry[],
   local: IntakeEntry[],
 ): IntakeEntry[] {
-  return [...backend, ...local].sort((a, b) =>
-    a.loggedAt < b.loggedAt ? 1 : -1,
+  const userId = getCurrentUserId();
+  const scoped = [...backend, ...local].filter(
+    (e) => !e.userId || e.userId === userId,
   );
+  return scoped.sort((a, b) => (a.loggedAt < b.loggedAt ? 1 : -1));
 }
 
 export function getCurrentUser(): Promise<UserProfile> {
@@ -163,9 +174,38 @@ export function getCurrentUser(): Promise<UserProfile> {
   return Promise.resolve(profile);
 }
 
-export async function getAllEntries(): Promise<IntakeEntry[]> {
-  const backend = await fetchBackendEntries();
-  return mergeEntries(backend, getEntries());
+export async function getAllEntries(options?: {
+  force?: boolean;
+}): Promise<IntakeEntry[]> {
+  const userId = getCurrentUserId();
+  const now = Date.now();
+  if (
+    !options?.force &&
+    entriesCache &&
+    entriesCache.userId === userId &&
+    now - entriesCache.at < ENTRIES_TTL_MS
+  ) {
+    return entriesCache.rows;
+  }
+  if (!options?.force && entriesInflight) {
+    return entriesInflight;
+  }
+
+  entriesInflight = (async () => {
+    const backend = await fetchBackendEntries();
+    const rows = mergeEntries(backend, getEntries());
+    entriesCache = { userId, at: Date.now(), rows };
+    entriesInflight = null;
+    return rows;
+  })();
+
+  return entriesInflight;
+}
+
+/** Drop entries cache after logging / edits so UI refreshes. */
+export function invalidateEntriesCache(): void {
+  entriesCache = null;
+  entriesInflight = null;
 }
 
 export async function getTodayEntries(): Promise<IntakeEntry[]> {
@@ -187,7 +227,7 @@ export async function listMedicalReports(
 ): Promise<MedicalReportSummary[]> {
   try {
     const uid = userId ?? getCurrentUserId();
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/medical/reports?user_id=${encodeURIComponent(uid)}&limit=${limit}`,
     );
     if (!res.ok) return [];
@@ -221,7 +261,7 @@ export async function patchMedicalReport(
   reportId: number,
   patch: MedicalReportPatch,
 ): Promise<MedicalReportSummary> {
-  const res = await fetch(`/api/medical/reports/${reportId}`, {
+  const res = await apiFetch(`/api/medical/reports/${reportId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -231,7 +271,7 @@ export async function patchMedicalReport(
 }
 
 export async function deleteMedicalReport(reportId: number): Promise<void> {
-  const res = await fetch(`/api/medical/reports/${reportId}`, {
+  const res = await apiFetch(`/api/medical/reports/${reportId}`, {
     method: "DELETE",
   });
   if (!res.ok) await apiError(res);
@@ -256,7 +296,7 @@ export async function calculateSugarBarrier(input: {
     });
 
   try {
-    const res = await fetch("/api/medical/recommend-intake", {
+    const res = await apiFetch("/api/medical/recommend-intake", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -271,7 +311,7 @@ export async function calculateSugarBarrier(input: {
     });
     if (!res.ok) {
       // Legacy path if older backend only has /profile/sugar-barrier
-      const legacy = await fetch("/api/profile/sugar-barrier", {
+      const legacy = await apiFetch("/api/profile/sugar-barrier", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -327,18 +367,19 @@ export async function analyzeDrink(file: File, userId?: string): Promise<DrinkAn
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId ?? getCurrentUserId());
-  const res = await fetch(analyzeUrl("/api/drinks/analyze"), { method: "POST", body: form });
+  const res = await apiFetch(analyzeUrl("/api/drinks/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
 
 export async function confirmDrink(analysisId: string, drink: unknown, userId?: string): Promise<DrinkConfirmResponse> {
-  const res = await fetch(`/api/drinks/${analysisId}/confirm`, {
+  const res = await apiFetch(`/api/drinks/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ drink, user_id: userId ?? getCurrentUserId() }),
   });
   if (!res.ok) await apiError(res);
+  invalidateEntriesCache();
   return res.json();
 }
 
@@ -346,18 +387,19 @@ export async function analyzeFood(file: File, userId?: string): Promise<FoodAnal
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId ?? getCurrentUserId());
-  const res = await fetch(analyzeUrl("/api/foods/analyze"), { method: "POST", body: form });
+  const res = await apiFetch(analyzeUrl("/api/foods/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
 
 export async function confirmFood(analysisId: string, food: unknown, userId?: string, name?: string): Promise<FoodConfirmResponse> {
-  const res = await fetch(`/api/foods/${analysisId}/confirm`, {
+  const res = await apiFetch(`/api/foods/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ food, user_id: userId ?? getCurrentUserId(), name: name || null }),
   });
   if (!res.ok) await apiError(res);
+  invalidateEntriesCache();
   return res.json();
 }
 
@@ -365,7 +407,7 @@ export async function analyzeMedical(file: File, userId?: string): Promise<Medic
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId ?? getCurrentUserId());
-  const res = await fetch(analyzeUrl("/api/medical/analyze"), { method: "POST", body: form });
+  const res = await apiFetch(analyzeUrl("/api/medical/analyze"), { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
@@ -380,7 +422,7 @@ export async function confirmMedical(
     height_cm?: number | null;
   },
 ): Promise<MedicalConfirmResponse> {
-  const res = await fetch(`/api/medical/${analysisId}/confirm`, {
+  const res = await apiFetch(`/api/medical/${analysisId}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -421,7 +463,7 @@ export async function fetchMedicalMetrics(
       user_id: userId ?? getCurrentUserId(),
       limit: "50",
     });
-    const res = await fetch(`/api/medical/metrics?${q}`);
+    const res = await apiFetch(`/api/medical/metrics?${q}`);
     if (!res.ok) return [];
     const rows = (await res.json()) as BackendMedicalMetric[];
     return Array.isArray(rows) ? rows : [];
@@ -432,19 +474,21 @@ export async function fetchMedicalMetrics(
 
 /** Log water volume (ml). Hold-to-fill commits full sips and partials on release. */
 export async function logWaterSip(ml = 30, userId?: string): Promise<{ intake_id: number; ml: number }> {
-  const res = await fetch("/api/water/sip", {
+  const res = await apiFetch("/api/water/sip", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user_id: userId ?? getCurrentUserId(), ml }),
   });
   if (!res.ok) await apiError(res);
+  invalidateEntriesCache();
   return res.json();
 }
 
 export async function deleteIntake(intakeId: number | string): Promise<void> {
   const id = String(intakeId).replace(/^be_/, "");
-  const res = await fetch(`/intakes/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/intakes/${id}`, { method: "DELETE" });
   if (!res.ok) await apiError(res);
+  invalidateEntriesCache();
 }
 
 /** Upload recorded audio for Azure Speech transcription. */
@@ -457,7 +501,7 @@ export async function transcribeAudio(
   form.append("user_id", userId ?? getCurrentUserId());
   let res: Response;
   try {
-    res = await fetch("/api/ai/transcribe", { method: "POST", body: form });
+    res = await apiFetch("/api/ai/transcribe", { method: "POST", body: form });
   } catch {
     throw new Error("Cannot reach the backend. Is uvicorn running on port 8000?");
   }
@@ -502,7 +546,7 @@ export async function patchEntry(
         extras,
       };
     }
-    const res = await fetch(`/intakes/${id.replace(/^be_/, "")}`, {
+    const res = await apiFetch(`/intakes/${id.replace(/^be_/, "")}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -521,7 +565,7 @@ export async function uploadEntryImage(
   if (entry.id.startsWith("be_")) {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(`/intakes/${entry.id.replace(/^be_/, "")}/image`, {
+    const res = await apiFetch(`/intakes/${entry.id.replace(/^be_/, "")}/image`, {
       method: "POST",
       body: form,
     });

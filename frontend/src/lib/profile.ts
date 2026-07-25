@@ -4,13 +4,15 @@ import {
   type NutritionTargets,
   type Sex,
 } from "./types";
+import { getCurrentUserId } from "./auth";
 
 /**
  * Local profile preferences (personal body data + nutrition targets).
- * Survives reloads; swap for a real /api/profile later without UI changes.
+ * Scoped per signed-in user so accounts don't share targets.
  */
 
-const PROFILE_KEY = "nutrion.profile.v1";
+const PROFILE_PREFIX = "nutrion.profile.v2";
+const LEGACY_PROFILE = "nutrion.profile.v1";
 
 export interface PersonalData {
   age: number | null;
@@ -39,9 +41,11 @@ const DEFAULT_PROFILE: StoredProfile = {
   goalSource: "user",
 };
 
-function read(): StoredProfile {
-  if (typeof window === "undefined") return DEFAULT_PROFILE;
-  const raw = window.localStorage.getItem(PROFILE_KEY);
+function profileKey(userId = getCurrentUserId()): string {
+  return `${PROFILE_PREFIX}.${userId}`;
+}
+
+function parseProfile(raw: string | null): StoredProfile {
   if (!raw) return DEFAULT_PROFILE;
   try {
     const parsed = JSON.parse(raw) as Partial<StoredProfile>;
@@ -65,10 +69,27 @@ function read(): StoredProfile {
   }
 }
 
+function read(): StoredProfile {
+  if (typeof window === "undefined") return DEFAULT_PROFILE;
+  const userId = getCurrentUserId();
+  const key = profileKey(userId);
+  const raw = window.localStorage.getItem(key);
+  if (raw) return parseProfile(raw);
+
+  // One-time migrate legacy shared profile into this user's bucket.
+  const legacy = window.localStorage.getItem(LEGACY_PROFILE);
+  if (legacy) {
+    const migrated = parseProfile(legacy);
+    window.localStorage.setItem(key, JSON.stringify(migrated));
+    return migrated;
+  }
+  return DEFAULT_PROFILE;
+}
+
 function write(profile: StoredProfile): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(
-    PROFILE_KEY,
+    profileKey(),
     JSON.stringify({ ...profile, updatedAt: new Date().toISOString() }),
   );
 }

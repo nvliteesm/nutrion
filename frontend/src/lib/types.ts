@@ -47,6 +47,8 @@ export interface Nutrients {
 
 export interface IntakeEntry {
   id: string;
+  /** Owner — Supabase UUID or demo id (u_maya). Set on every log. */
+  userId?: string;
   type: EntryType;
   name: string;
   /** ISO timestamp of when it was consumed. */

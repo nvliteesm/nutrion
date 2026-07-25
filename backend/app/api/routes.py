@@ -4,11 +4,12 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth_user import resolve_user_id
 from app.config import settings
 from app.db import get_session
 from app.models.orm import Intake
@@ -147,17 +148,19 @@ async def health(session: AsyncSession = Depends(get_session)) -> HealthResponse
     tags=["foods"],
 )
 async def foods_analyze(
+    request: Request,
     file: UploadFile = File(..., description="Food / meal photo"),
     user_id: str = Form("default"),
     session: AsyncSession = Depends(get_session),
 ) -> FoodAnalyzeResponse:
+    uid = await resolve_user_id(request, claimed=user_id, session=session)
     file_bytes, filename = await _read_upload(file)
     try:
         return await confirm_flow.analyze_food(
             session,
             file_bytes=file_bytes or b"",
             filename=filename or "",
-            user_id=user_id or "default",
+            user_id=uid,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -188,16 +191,18 @@ async def foods_get(
     tags=["foods"],
 )
 async def foods_confirm(
+    request: Request,
     analysis_id: str,
     body: FoodConfirmRequest,
     session: AsyncSession = Depends(get_session),
 ) -> FoodConfirmResponse:
+    uid = await resolve_user_id(request, claimed=body.user_id, session=session)
     try:
         return await confirm_flow.confirm_food(
             session,
             analysis_id,
             body.food,
-            user_id=body.user_id or "default",
+            user_id=uid,
             name=body.name,
         )
     except KeyError as exc:
@@ -213,17 +218,19 @@ async def foods_confirm(
     tags=["drinks"],
 )
 async def drinks_analyze(
+    request: Request,
     file: UploadFile = File(..., description="Drink nutrition label or beverage photo"),
     user_id: str = Form("default"),
     session: AsyncSession = Depends(get_session),
 ) -> DrinkAnalyzeResponse:
+    uid = await resolve_user_id(request, claimed=user_id, session=session)
     file_bytes, filename = await _read_upload(file)
     try:
         return await confirm_flow.analyze_drink(
             session,
             file_bytes=file_bytes or b"",
             filename=filename or "",
-            user_id=user_id or "default",
+            user_id=uid,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -254,16 +261,18 @@ async def drinks_get(
     tags=["drinks"],
 )
 async def drinks_confirm(
+    request: Request,
     analysis_id: str,
     body: DrinkConfirmRequest,
     session: AsyncSession = Depends(get_session),
 ) -> DrinkConfirmResponse:
+    uid = await resolve_user_id(request, claimed=body.user_id, session=session)
     try:
         return await confirm_flow.confirm_drink(
             session,
             analysis_id,
             body.drink,
-            user_id=body.user_id or "default",
+            user_id=uid,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -278,17 +287,19 @@ async def drinks_confirm(
     tags=["medical"],
 )
 async def medical_analyze(
+    request: Request,
     file: UploadFile = File(..., description="Medical report PDF/image/text"),
     user_id: str = Form("default"),
     session: AsyncSession = Depends(get_session),
 ) -> MedicalAnalyzeResponse:
+    uid = await resolve_user_id(request, claimed=user_id, session=session)
     file_bytes, filename = await _read_upload(file)
     try:
         return await confirm_flow.analyze_medical(
             session,
             file_bytes=file_bytes or b"",
             filename=filename or "",
-            user_id=user_id or "default",
+            user_id=uid,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -303,13 +314,15 @@ async def medical_analyze(
     tags=["medical"],
 )
 async def medical_metrics_list(
+    request: Request,
     user_id: Optional[str] = None,
     limit: int = 50,
     session: AsyncSession = Depends(get_session),
 ) -> list[MedicalMetricRecord]:
+    uid = await resolve_user_id(request, claimed=user_id, session=session)
     return await analysis_store.list_medical_metrics(
         session,
-        user_id=user_id,
+        user_id=uid,
         limit=min(limit, 200),
     )
 
@@ -321,13 +334,15 @@ async def medical_metrics_list(
     tags=["medical"],
 )
 async def medical_reports_list(
+    request: Request,
     user_id: Optional[str] = None,
     limit: int = 50,
     session: AsyncSession = Depends(get_session),
 ) -> list[MedicalReportRecord]:
+    uid = await resolve_user_id(request, claimed=user_id, session=session)
     return await analysis_store.list_medical_reports(
         session,
-        user_id=user_id,
+        user_id=uid,
         limit=min(limit, 200),
     )
 
@@ -391,16 +406,18 @@ async def medical_get(
     tags=["medical"],
 )
 async def medical_confirm(
+    request: Request,
     analysis_id: str,
     body: MedicalConfirmRequest,
     session: AsyncSession = Depends(get_session),
 ) -> MedicalConfirmResponse:
+    uid = await resolve_user_id(request, claimed=body.user_id, session=session)
     try:
         return await confirm_flow.confirm_medical(
             session,
             analysis_id,
             body.metrics,
-            user_id=body.user_id or "default",
+            user_id=uid,
             age=body.age,
             sex=body.sex,
             height_cm=body.height_cm,
@@ -425,17 +442,19 @@ async def medical_confirm(
     tags=["medical"],
 )
 async def profile_sugar_barrier(
+    request: Request,
     body: SugarBarrierRequest,
     session: AsyncSession = Depends(get_session),
 ) -> SugarBarrierResponse:
     from app.services.sugar_barrier import recommend_sugar_barrier
 
+    uid = await resolve_user_id(request, claimed=body.user_id, session=session)
     hba1c = body.hba1c
     fasting = body.fasting_glucose
     if body.use_latest_labs and (hba1c is None or fasting is None):
         reports = await analysis_store.list_medical_reports(
             session,
-            user_id=body.user_id or None,
+            user_id=uid,
             limit=1,
         )
         if reports:
@@ -467,14 +486,16 @@ async def profile_sugar_barrier(
     tags=["storage"],
 )
 async def get_intakes(
+    request: Request,
     user_id: Optional[str] = None,
     kind: Optional[str] = None,
     limit: int = 50,
     session: AsyncSession = Depends(get_session),
 ) -> list[IntakeRecord]:
+    uid = await resolve_user_id(request, claimed=user_id, session=session)
     return await structured_store.list_intakes(
         session,
-        user_id=user_id,
+        user_id=uid,
         kind=kind,
         limit=min(limit, 500),
     )
@@ -582,9 +603,11 @@ async def delete_intake(
     tags=["storage"],
 )
 async def water_sip(
+    request: Request,
     body: WaterSipRequest,
     session: AsyncSession = Depends(get_session),
 ) -> WaterSipResponse:
+    uid = await resolve_user_id(request, claimed=body.user_id, session=session)
     ml = round(float(body.ml), 1)
     meal = ExtractedMeal(
         name="Water",
@@ -606,7 +629,7 @@ async def water_sip(
     row = await structured_store.save_intake(
         session,
         meal,
-        user_id=body.user_id or "default",
+        user_id=uid,
         source="manual",
         kind="water",
         confirmed=True,
@@ -621,11 +644,13 @@ async def water_sip(
     tags=["storage"],
 )
 async def get_daily_totals(
+    request: Request,
     user_id: str = "default",
     day: Optional[date] = None,
     session: AsyncSession = Depends(get_session),
 ) -> DailyTotals:
-    return await structured_store.daily_totals(session, user_id=user_id, day=day)
+    uid = await resolve_user_id(request, claimed=user_id, session=session)
+    return await structured_store.daily_totals(session, user_id=uid, day=day)
 
 
 @router.get(
@@ -647,10 +672,15 @@ async def storage_status(session: AsyncSession = Depends(get_session)) -> Storag
     summary="Search semantic memory (Vector DB)",
     tags=["storage"],
 )
-async def vector_search(body: VectorSearchRequest) -> VectorSearchResponse:
+async def vector_search(
+    request: Request,
+    body: VectorSearchRequest,
+    session: AsyncSession = Depends(get_session),
+) -> VectorSearchResponse:
+    uid = await resolve_user_id(request, claimed=body.user_id, session=session)
     results = await vector_store.search(
         body.query,
-        user_id=body.user_id,
+        user_id=uid,
         limit=body.limit,
     )
     return VectorSearchResponse(results=results)

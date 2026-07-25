@@ -13,6 +13,7 @@ import {
 } from "@/components/icons";
 import { addEntry, addFavorite, getFavorites } from "@/lib/store";
 import { getCurrentUserId } from "@/lib/auth";
+import { apiFetch } from "@/lib/apiFetch";
 import { getToday, getNowHHMM } from "@/lib/date";
 import { parseNonNegative } from "@/lib/nutrition";
 import { useToast } from "@/components/ui";
@@ -107,7 +108,7 @@ export function ManualForm() {
     };
 
     try {
-      const res = await fetch("/memory/intakes", {
+      const res = await apiFetch("/memory/intakes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: getCurrentUserId(), meal }),

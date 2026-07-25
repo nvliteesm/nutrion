@@ -82,8 +82,12 @@ async def _postgres_reset_id_sequences(conn) -> None:
 
 async def init_db() -> None:
     from app.models import orm  # noqa: F401
+    from app.services import parents as parents_service
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         if settings.is_sqlite:
             await _sqlite_add_missing_columns(conn)
+
+    async with SessionLocal() as session:
+        await parents_service.ensure_demo_parents(session)

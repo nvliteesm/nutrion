@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AuthError, getStoredSession, register } from "@/lib/auth";
 import { Button, Card } from "@/components/ui";
 import { Field } from "@/components/auth/Field";
+import { AuthDivider, GoogleButton } from "@/components/auth/GoogleButton";
 import { AlertTriangleIcon } from "@/components/icons";
 
 export default function RegisterPage() {
@@ -55,7 +56,12 @@ export default function RegisterPage() {
         Start with the Free plan — no card required.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
+      <div className="mt-5 flex flex-col gap-4">
+        <GoogleButton label="Sign up with Google" onError={setError} />
+        <AuthDivider label="or sign up with email" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-1 flex flex-col gap-4">
         <Field
           label="Full name"
           name="fullName"

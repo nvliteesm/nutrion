@@ -8,6 +8,27 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 
+class Parent(Base):
+    """App user profile. id = Supabase Auth UUID or demo id (u_maya, …)."""
+
+    __tablename__ = "parents"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    email: Mapped[str] = mapped_column(String(256), default="", index=True)
+    full_name: Mapped[str] = mapped_column(String(256), default="")
+    auth_provider: Mapped[str] = mapped_column(String(32), default="demo")
+    subscription: Mapped[str] = mapped_column(String(32), default="free")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        index=True,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
 class Intake(Base):
     """Confirmed nutrition entry — 1 food or drink = 1 row."""
 

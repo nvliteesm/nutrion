@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth_user import resolve_user_id
 from app.db import get_session
 from app.models.schemas import (
     LoggingCompleteness,
@@ -23,60 +24,63 @@ from app.services import analytics, medical_store
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
-def _user_id(user_id: str = Query(default="default")) -> str:
-    """Stand-in for auth: scope every query to this user_id."""
-    return user_id or "default"
-
-
 @router.get("/daily", response_model=PeriodSummary)
 async def daily_analytics(
+    request: Request,
     day: Optional[date] = Query(default=None),
     confirmed_only: bool = Query(default=True),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> PeriodSummary:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.get_daily_summary(
-        db, user_id=user_id, day=day, confirmed_only=confirmed_only
+        db, user_id=uid, day=day, confirmed_only=confirmed_only
     )
 
 
 @router.get("/weekly", response_model=PeriodSummary)
 async def weekly_analytics(
+    request: Request,
     anchor: Optional[date] = Query(default=None, description="Any day in the target ISO week"),
     confirmed_only: bool = Query(default=True),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> PeriodSummary:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.get_weekly_summary(
-        db, user_id=user_id, anchor=anchor, confirmed_only=confirmed_only
+        db, user_id=uid, anchor=anchor, confirmed_only=confirmed_only
     )
 
 
 @router.get("/monthly", response_model=PeriodSummary)
 async def monthly_analytics(
+    request: Request,
     anchor: Optional[date] = Query(default=None, description="Any day in the target month"),
     confirmed_only: bool = Query(default=True),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> PeriodSummary:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.get_monthly_summary(
-        db, user_id=user_id, anchor=anchor, confirmed_only=confirmed_only
+        db, user_id=uid, anchor=anchor, confirmed_only=confirmed_only
     )
 
 
 @router.get("/top-sugar-sources", response_model=TopSugarSources)
 async def top_sugar_sources(
+    request: Request,
     start: Optional[date] = Query(default=None),
     end: Optional[date] = Query(default=None),
     limit: int = Query(default=10, ge=1, le=50),
     drinks_only: bool = Query(default=True),
     confirmed_only: bool = Query(default=True),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> TopSugarSources:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.get_top_sugar_sources(
         db,
-        user_id=user_id,
+        user_id=uid,
         start=start,
         end=end,
         limit=limit,
@@ -87,16 +91,18 @@ async def top_sugar_sources(
 
 @router.get("/trends", response_model=NutritionTrend)
 async def nutrition_trends(
+    request: Request,
     start: Optional[date] = Query(default=None),
     end: Optional[date] = Query(default=None),
     metric: str = Query(default="sugar_g"),
     confirmed_only: bool = Query(default=True),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> NutritionTrend:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.get_nutrition_trend(
         db,
-        user_id=user_id,
+        user_id=uid,
         start=start,
         end=end,
         metric=metric,
@@ -106,15 +112,17 @@ async def nutrition_trends(
 
 @router.get("/completeness", response_model=LoggingCompleteness)
 async def logging_completeness(
+    request: Request,
     start: Optional[date] = Query(default=None),
     end: Optional[date] = Query(default=None),
     min_meals_per_day: int = Query(default=1, ge=1, le=10),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> LoggingCompleteness:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.get_logging_completeness(
         db,
-        user_id=user_id,
+        user_id=uid,
         start=start,
         end=end,
         min_meals_per_day=min_meals_per_day,
@@ -123,35 +131,42 @@ async def logging_completeness(
 
 @router.get("/medical-metrics", response_model=list[MedicalMetricRecord])
 async def medical_metrics(
+    request: Request,
     confirmed_only: bool = Query(default=True),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> list[MedicalMetricRecord]:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.get_latest_medical_metrics(
-        db, user_id=user_id, confirmed_only=confirmed_only
+        db, user_id=uid, confirmed_only=confirmed_only
     )
 
 
 @router.post("/medical-metrics", response_model=MedicalMetricRecord)
 async def create_medical_metric(
+    request: Request,
     body: MedicalMetricCreate,
     db: AsyncSession = Depends(get_session),
 ) -> MedicalMetricRecord:
     """Store a confirmed medical metric (for Person 1 / demos / report ingest)."""
-    return await medical_store.save_medical_metric(db, body)
+    uid = await resolve_user_id(request, claimed=body.user_id, session=db)
+    payload = body.model_copy(update={"user_id": uid})
+    return await medical_store.save_medical_metric(db, payload)
 
 
 @router.get("/compare", response_model=PeriodComparison)
 async def compare_periods(
+    request: Request,
     start: Optional[date] = Query(default=None),
     end: Optional[date] = Query(default=None),
     confirmed_only: bool = Query(default=True),
-    user_id: str = Depends(_user_id),
+    user_id: str = Query(default="default"),
     db: AsyncSession = Depends(get_session),
 ) -> PeriodComparison:
+    uid = await resolve_user_id(request, claimed=user_id, session=db)
     return await analytics.compare_periods(
         db,
-        user_id=user_id,
+        user_id=uid,
         start=start,
         end=end,
         confirmed_only=confirmed_only,

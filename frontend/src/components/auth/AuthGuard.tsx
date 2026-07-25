@@ -2,24 +2,36 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getStoredSession } from "@/lib/auth";
+import { getStoredSession, hydrateSessionFromSupabase, clearSession } from "@/lib/auth";
 import { Logo } from "@/components/layout/Logo";
 
 /**
- * Client-side gate for the signed-in app. Checks the stored session on mount
- * and redirects to /login when absent. Shows a brief branded splash while
- * checking to avoid a flash of protected content.
+ * Client-side gate for the signed-in app. Blocks all dashboard UI until a
+ * real session exists; otherwise clears stale cookies and sends to /login.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (getStoredSession()) {
-      setReady(true);
-    } else {
-      router.replace("/login");
-    }
+    let cancelled = false;
+    (async () => {
+      if (getStoredSession()) {
+        if (!cancelled) setReady(true);
+        return;
+      }
+      const hydrated = await hydrateSessionFromSupabase();
+      if (cancelled) return;
+      if (hydrated) {
+        setReady(true);
+      } else {
+        clearSession();
+        router.replace("/login");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (!ready) {

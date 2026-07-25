@@ -44,9 +44,12 @@ export function waterMl(entries: IntakeEntry[]): number {
     .reduce((total, e) => total + (e.volumeMl ?? 0), 0);
 }
 
-/** Count hydration in cups from water entries (~250 ml per cup). */
+/**
+ * Hydration in cups (~250 ml). Fractional so small sips still move Insights
+ * charts (floor would hide anything under 250 ml as "0 cups").
+ */
 export function waterCups(entries: IntakeEntry[]): number {
-  return Math.floor(waterMl(entries) / 250);
+  return Math.round((waterMl(entries) / 250) * 100) / 100;
 }
 
 /**

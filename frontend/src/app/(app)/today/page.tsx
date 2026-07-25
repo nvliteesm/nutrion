@@ -4,14 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getAllEntries,
   getCurrentUser,
-  getTodayEntries,
-  getTodayTotals,
   listMedicalReports,
 } from "@/lib/api";
+import { getStoredProfile } from "@/lib/profile";
 import { getToday, localDayKey } from "@/lib/date";
 import { firstName, formatDateLong, greeting } from "@/lib/format";
 import { buildMonthGrid, groupByDate } from "@/lib/history";
-import { waterMl } from "@/lib/nutrition";
+import { buildDailyTotals, waterMl } from "@/lib/nutrition";
 import type {
   DailyTotals,
   IntakeEntry,
@@ -54,15 +53,21 @@ export default function TodayPage() {
   const [selectedIso, setSelectedIso] = useState(todayIso);
 
   const refresh = useCallback(() => {
-    Promise.all([
-      getCurrentUser(),
-      getTodayTotals(),
-      getTodayEntries(),
-      getAllEntries(),
-      listMedicalReports(),
-    ]).then(([user, totals, todayEntries, allEntries, reports]) => {
-      setData({ user, totals, todayEntries, allEntries, reports });
-    });
+    // One intakes fetch — derive today totals/entries locally (was 3× /intakes).
+    Promise.all([getCurrentUser(), getAllEntries({ force: true }), listMedicalReports()]).then(
+      ([user, allEntries, reports]) => {
+        const today = getToday();
+        const todayEntries = allEntries.filter(
+          (e) => localDayKey(e.loggedAt) === today,
+        );
+        const totals = buildDailyTotals(
+          today,
+          todayEntries,
+          getStoredProfile().targets,
+        );
+        setData({ user, totals, todayEntries, allEntries, reports });
+      },
+    );
   }, []);
 
   useEffect(() => {

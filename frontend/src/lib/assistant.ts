@@ -5,6 +5,7 @@
  */
 
 import { getCurrentUserId } from "./auth";
+import { apiFetch } from "./apiFetch";
 
 export interface AssistantBar {
   label: string;
@@ -152,7 +153,7 @@ export async function askBackend(
 ): Promise<AssistantMessage> {
   const uid = userId || getCurrentUserId();
   try {
-    const res = await fetch("/api/ai/analyze", {
+    const res = await apiFetch("/api/ai/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, user_id: uid }),

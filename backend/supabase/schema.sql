@@ -1,7 +1,24 @@
 -- NutriON organized schema (Supabase)
+-- parents:        1 app user = 1 row (id = auth UUID or demo u_maya / u_alex)
 -- intakes:        1 food OR 1 drink = 1 row
 -- medical_reports: 1 lab report = 1 row (Blood Sugar + Lipid columns)
 -- analyses:       temporary draft before confirm (can ignore in day-to-day editing)
+
+create table if not exists parents (
+  id varchar(128) primary key,
+  email varchar(256) not null default '',
+  full_name varchar(256) not null default '',
+  auth_provider varchar(32) not null default 'demo',
+  subscription varchar(32) not null default 'free',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists ix_parents_email on parents (email);
+create index if not exists ix_parents_created_at on parents (created_at);
+
+-- Soft reference: intakes.user_id / medical_reports.user_id / insights.user_id
+-- should match parents.id (no hard FK so legacy 'default' rows still load).
 
 create table if not exists intakes (
   id serial primary key,

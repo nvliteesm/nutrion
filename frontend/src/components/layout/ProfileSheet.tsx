@@ -12,7 +12,7 @@ import {
   FileTextIcon,
   SparkleIcon,
 } from "@/components/icons";
-import { clearSession, getStoredSession, type Session } from "@/lib/auth";
+import { getStoredSession, logout, type Session } from "@/lib/auth";
 import { calculateSugarBarrier, listMedicalReports } from "@/lib/api";
 import {
   applyIntakeTargets,
@@ -74,8 +74,8 @@ export function ProfileSheet({
 
   const isPremium = session.subscription === "premium";
 
-  function handleLogout() {
-    clearSession();
+  async function handleLogout() {
+    await logout();
     onClose();
     router.replace("/login");
   }

@@ -27,6 +27,7 @@ import {
   fetchMedicalMetrics,
   type BackendMedicalMetric,
 } from "@/lib/api";
+import { loadSessionInsights } from "@/lib/insightsApi";
 import { linkedInsight, MEDICAL_DISCLAIMER, outOfRange } from "@/lib/medical";
 import type { IntakeEntry, MedicalMetric, NutritionTargets } from "@/lib/types";
 
@@ -73,30 +74,41 @@ export function InsightsPremium({
   entries,
   targets,
   endIso,
+  userId: userIdProp,
 }: {
   entries: IntakeEntry[];
   targets: NutritionTargets;
   endIso: string;
+  /** Signed-in user — insights/analytics always scoped to this id. */
+  userId?: string;
 }) {
+  const sessionUserId = userIdProp || getCurrentUserId();
   const [period, setPeriod] = useState<number>(7);
   const [metrics, setMetrics] = useState<BackendMedicalMetric[]>([]);
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(true);
   const [aiNote, setAiNote] = useState<string | undefined>();
+  const [backendWeekly, setBackendWeekly] = useState<string | null>(null);
+
+  const scopedEntries = useMemo(
+    () =>
+      entries.filter((e) => !e.userId || e.userId === sessionUserId),
+    [entries, sessionUserId],
+  );
 
   const data = useMemo(
-    () => computeInsights(entries, targets, endIso, period),
-    [entries, targets, endIso, period],
+    () => computeInsights(scopedEntries, targets, endIso, period),
+    [scopedEntries, targets, endIso, period],
   );
 
   const series = useMemo(
-    () => dailySeries(entries, targets, endIso, period, "totalSugar_g"),
-    [entries, targets, endIso, period],
+    () => dailySeries(scopedEntries, targets, endIso, period, "totalSugar_g"),
+    [scopedEntries, targets, endIso, period],
   );
 
   const balance = useMemo(
-    () => dailySodiumSaltWater(entries, targets, endIso, period),
-    [entries, targets, endIso, period],
+    () => dailySodiumSaltWater(scopedEntries, targets, endIso, period),
+    [scopedEntries, targets, endIso, period],
   );
 
   const topSource = data.sources[0] ?? null;
@@ -121,31 +133,45 @@ export function InsightsPremium({
   );
 
   useEffect(() => {
-    fetchMedicalMetrics(getCurrentUserId()).then(setMetrics);
-  }, []);
+    fetchMedicalMetrics(sessionUserId).then(setMetrics);
+  }, [sessionUserId]);
 
   useEffect(() => {
     let cancelled = false;
-    const userId = getCurrentUserId();
     setAiLoading(true);
     setAiText(null);
+    setBackendWeekly(null);
 
-    const question =
-      `Summarize my strongest nutrition pattern over the last ${period} days ` +
-      `from confirmed logs only. Focus on sugar timing, top sources, and one ` +
-      `practical non-diagnostic suggestion. Keep it under 80 words.`;
+    (async () => {
+      // Backend insight/analytics — always for the signed-in session user.
+      const sessionData = await loadSessionInsights(sessionUserId);
+      if (cancelled) return;
 
-    askBackend(question, userId).then((msg) => {
+      const parts = [
+        sessionData.weekly?.body,
+        sessionData.sugar?.body,
+      ].filter(Boolean) as string[];
+      if (parts.length) {
+        setBackendWeekly(parts.join(" "));
+      }
+
+      const question =
+        `Summarize my strongest nutrition pattern over the last ${period} days ` +
+        `from confirmed logs only (food, drink, and water). ` +
+        `Include hydration if I logged water. Focus on sugar timing, top sources, ` +
+        `water progress, and one practical non-diagnostic suggestion. Keep it under 80 words.`;
+
+      const msg = await askBackend(question, sessionUserId);
       if (cancelled) return;
       setAiText(msg.text);
       setAiNote(msg.note);
       setAiLoading(false);
-    });
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [period]);
+  }, [period, sessionUserId]);
 
   const dq = data.dataQuality;
   const completeness =
@@ -177,7 +203,7 @@ export function InsightsPremium({
     {
       key: "water",
       label: "Water",
-      value: `${balance.averages.waterCups}`,
+      value: `${Number(balance.averages.waterCups).toFixed(1)}`,
       unit: "cups/day",
       target: `${balance.dailyTargets.waterCups} cups`,
       pct: balance.averages.waterPct,
@@ -451,8 +477,15 @@ export function InsightsPremium({
         ) : (
           <>
             <p className="text-[16px] font-bold leading-relaxed md:text-[17px]">
-              {aiText}
+              {aiText ||
+                backendWeekly ||
+                "Not enough confirmed logs yet for a pattern insight."}
             </p>
+            {backendWeekly && aiText && (
+              <p className="mt-3 text-[13px] font-medium leading-relaxed text-white/65">
+                {backendWeekly}
+              </p>
+            )}
             {aiNote && (
               <p className="mt-3 text-[13px] font-medium leading-relaxed text-white/65">
                 {aiNote}

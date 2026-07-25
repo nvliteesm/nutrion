@@ -1,25 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getAllEntries } from "@/lib/api";
-import { getStoredSession } from "@/lib/auth";
+import { getCurrentUserId, getStoredSession } from "@/lib/auth";
 import { getToday } from "@/lib/date";
-import { DEFAULT_TARGETS } from "@/lib/types";
+import { getStoredProfile } from "@/lib/profile";
 import { Skeleton } from "@/components/ui";
-import type { IntakeEntry, Subscription } from "@/lib/types";
+import type { IntakeEntry, NutritionTargets, Subscription } from "@/lib/types";
 import { InsightsLocked } from "@/components/insights/InsightsLocked";
 import { InsightsPremium } from "@/components/insights/InsightsPremium";
 
 export default function InsightsPage() {
+  const pathname = usePathname();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [entries, setEntries] = useState<IntakeEntry[] | null>(null);
+  const [targets, setTargets] = useState<NutritionTargets | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    setSubscription(getStoredSession()?.subscription ?? "free");
+  const reload = useCallback(() => {
+    const session = getStoredSession();
+    setSubscription(session?.subscription ?? "free");
+    setUserId(getCurrentUserId());
+    setTargets(getStoredProfile().targets);
+    // Always re-fetch intakes for this session from the backend.
     getAllEntries().then(setEntries);
   }, []);
 
-  if (subscription === null) {
+  useEffect(() => {
+    reload();
+  }, [reload, pathname]);
+
+  useEffect(() => {
+    const onFocus = () => reload();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [reload]);
+
+  if (subscription === null || userId === null) {
     return <Skeleton className="h-40" />;
   }
 
@@ -27,15 +45,16 @@ export default function InsightsPage() {
     return <InsightsLocked />;
   }
 
-  if (!entries) {
+  if (!entries || !targets) {
     return <Skeleton className="h-40" />;
   }
 
   return (
     <InsightsPremium
       entries={entries}
-      targets={DEFAULT_TARGETS}
+      targets={targets}
       endIso={getToday()}
+      userId={userId}
     />
   );
 }
