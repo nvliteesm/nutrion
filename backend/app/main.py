@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 
 from fastapi import FastAPI
@@ -15,9 +16,7 @@ from app.db import init_db
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    await init_db()
+async def _warm_indexes() -> None:
     try:
         from app.services.knowledge_store import knowledge_store
 
@@ -38,7 +37,17 @@ async def lifespan(_app: FastAPI):
         )
     except Exception:  # noqa: BLE001
         logger.exception("Failed to backfill meal memory vectors")
-    yield
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await init_db()
+    warmup_task = asyncio.create_task(_warm_indexes())
+    try:
+        yield
+    finally:
+        if not warmup_task.done():
+            warmup_task.cancel()
 
 
 app = FastAPI(
