@@ -46,6 +46,21 @@ export async function apiAuthHeaders(
   return headers;
 }
 
+/**
+ * Resolve a relative API path against the deployed backend.
+ * On Vercel we set NEXT_PUBLIC_BACKEND_URL to the Railway URL so the browser
+ * talks straight to FastAPI — no Vercel proxy, no 60s gateway timeout on
+ * long AI scans. In local dev the var is unset and relative paths proxy
+ * through Next.js rewrites as before.
+ */
+function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
+  const base = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "");
+  if (base && typeof input === "string" && input.startsWith("/")) {
+    return `${base}${input}`;
+  }
+  return input;
+}
+
 /** fetch() with auth headers merged in. */
 export async function apiFetch(
   input: RequestInfo | URL,
@@ -58,7 +73,7 @@ export async function apiFetch(
   if (isForm) {
     delete auth["Content-Type"];
   }
-  return fetch(input, {
+  return fetch(resolveApiUrl(input), {
     ...init,
     headers: auth,
   });

@@ -3,38 +3,9 @@
     "frontend": {
       "root": "frontend",
       "framework": "nextjs"
-    },
-    "backend": {
-      "root": "backend",
-      "framework": "fastapi",
-      "entrypoint": "app.main:app"
     }
   },
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": { "type": "service", "service": "backend" }
-    },
-    {
-      "source": "/intakes(.*)",
-      "destination": { "type": "service", "service": "backend" }
-    },
-    {
-      "source": "/memory/(.*)",
-      "destination": { "type": "service", "service": "backend" }
-    },
-    {
-      "source": "/health",
-      "destination": { "type": "service", "service": "backend" }
-    },
-    {
-      "source": "/chat",
-      "destination": { "type": "service", "service": "backend" }
-    },
-    {
-      "source": "/uploads/(.*)",
-      "destination": { "type": "service", "service": "backend" }
-    },
     {
       "source": "/(.*)",
       "destination": { "type": "service", "service": "frontend" }

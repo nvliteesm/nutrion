@@ -88,7 +88,9 @@ function filePathToUrl(filePath?: string): string | undefined {
   if (!filePath) return undefined;
   const name = filePath.replace(/\\/g, "/").split("/").pop();
   if (!name) return undefined;
-  return `/uploads/${name}`;
+  // Uploaded images are served by the backend; point <img> at Railway on Vercel.
+  const base = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "";
+  return `${base}/uploads/${name}`;
 }
 
 function adaptBackendIntake(r: BackendIntake): IntakeEntry {
