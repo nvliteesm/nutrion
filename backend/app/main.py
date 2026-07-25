@@ -97,3 +97,8 @@ async def root() -> dict[str, object]:
         },
         "storage": ["/intakes", "/totals/daily", "/api/medical/metrics", "/vector/search"],
     }
+
+
+@app.get("/live")
+async def live() -> dict[str, str]:
+    return {"status": "ok"}
