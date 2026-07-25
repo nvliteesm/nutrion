@@ -458,12 +458,25 @@ class IntakeRecord(BaseModel):
     analysis_id: str = ""
 
 
+class IntakeNutrientPatch(BaseModel):
+    """Partial nutrient update — omitted fields keep their stored values."""
+
+    calories: Optional[float] = None
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+    fiber_g: Optional[float] = None
+    sugar_g: Optional[float] = None
+    sodium_mg: Optional[float] = None
+    extras: Optional[dict[str, float]] = None
+
+
 class IntakeUpdateRequest(BaseModel):
     """Partial update for an existing intake row."""
 
     name: Optional[str] = None
     serving: Optional[str] = None
-    nutrients: Optional[NutrientValues] = None
+    nutrients: Optional[IntakeNutrientPatch] = None
 
 
 class StorageStatus(BaseModel):

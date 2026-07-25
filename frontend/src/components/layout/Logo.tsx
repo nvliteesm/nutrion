@@ -17,6 +17,7 @@ export function Logo({
         height={783}
         className={cn("h-9 w-9 object-contain", className)}
         priority
+        unoptimized
       />
     );
   }
@@ -30,6 +31,7 @@ export function Logo({
         height={181}
         className="h-8 w-auto object-contain md:h-9"
         priority
+        unoptimized
       />
     </div>
   );

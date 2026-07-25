@@ -8,10 +8,12 @@ from typing import Any, Optional
 try:
     import chromadb
     from chromadb.api.models.Collection import Collection
+    from chromadb.errors import InvalidDimensionException
     CHROMADB_AVAILABLE = True
 except ImportError:
     chromadb = None  # type: ignore
     Collection = None  # type: ignore
+    InvalidDimensionException = Exception  # type: ignore
     CHROMADB_AVAILABLE = False
 
 from sqlalchemy import select
@@ -62,6 +64,8 @@ class VectorStore:
 
     def reset_collection(self) -> None:
         """Drop and recreate collection (needed when embedding dims change)."""
+        if not self._client:
+            return
         try:
             self._client.delete_collection(COLLECTION_NAME)
         except Exception:  # noqa: BLE001 — collection may not exist
@@ -73,7 +77,7 @@ class VectorStore:
 
     def _ensure_dims(self, embedding: list[float]) -> None:
         """If collection has conflicting dimensionality, recreate it empty."""
-        if self._collection.count() == 0:
+        if not self._collection or self._collection.count() == 0:
             return
         try:
             peek = self._collection.peek(limit=1)
@@ -92,6 +96,8 @@ class VectorStore:
         metadata: Optional[dict[str, Any]] = None,
     ) -> str:
         doc_id = f"intake-{intake_id}"
+        if not self._collection:
+            return doc_id
         embedding = (await foundry.embed([document]))[0]
         self._ensure_dims(embedding)
         meta = {"user_id": user_id, "intake_id": intake_id, **(metadata or {})}
@@ -106,12 +112,13 @@ class VectorStore:
             )
         except InvalidDimensionException:
             self.reset_collection()
-            self._collection.upsert(
-                ids=[doc_id],
-                documents=[document],
-                embeddings=[embedding],
-                metadatas=[clean_meta],
-            )
+            if self._collection:
+                self._collection.upsert(
+                    ids=[doc_id],
+                    documents=[document],
+                    embeddings=[embedding],
+                    metadatas=[clean_meta],
+                )
         return doc_id
 
     async def search(
@@ -121,6 +128,8 @@ class VectorStore:
         user_id: str,
         top_k: Optional[int] = None,
     ) -> list[dict[str, Any]]:
+        if not self._collection:
+            return []
         k = top_k or settings.rag_top_k
         embedding = (await foundry.embed([query]))[0]
         self._ensure_dims(embedding)
@@ -154,13 +163,17 @@ class VectorStore:
         return hits
 
     def count(self) -> int:
+        if not self._collection:
+            return 0
         return self._collection.count()
 
     def existing_ids(self) -> set[str]:
+        if not self._collection:
+            return set()
         return set(self._collection.get(include=[]).get("ids") or [])
 
     async def _upsert_intake_batch(self, batch: list[Intake]) -> int:
-        if not batch:
+        if not batch or not self._collection:
             return 0
         docs = [_intake_document(r) for r in batch]
         embeddings = await foundry.embed(docs)
@@ -186,16 +199,24 @@ class VectorStore:
             )
         except InvalidDimensionException:
             self.reset_collection()
-            self._collection.upsert(
-                ids=ids,
-                documents=docs,
-                embeddings=embeddings,
-                metadatas=metas,
-            )
+            if self._collection:
+                self._collection.upsert(
+                    ids=ids,
+                    documents=docs,
+                    embeddings=embeddings,
+                    metadatas=metas,
+                )
         return len(batch)
 
     async def ensure_indexed(self, session: AsyncSession) -> dict[str, int]:
         """Backfill meal_memory from Postgres for any missing non-water intakes."""
+        if not self._collection:
+            return {
+                "indexed": 0,
+                "added": 0,
+                "skipped_existing": 0,
+                "metadata_repaired": 0,
+            }
         result = await session.execute(
             select(Intake)
             .where(Intake.kind.in_(tuple(INDEXABLE_KINDS)))
@@ -233,7 +254,7 @@ class VectorStore:
 
     def sync_user_metadata(self, rows: list[Intake]) -> int:
         """Align Chroma user_id metadata with Postgres (no re-embed)."""
-        if not rows:
+        if not rows or not self._collection:
             return 0
         existing = self.existing_ids()
         ids: list[str] = []
@@ -262,11 +283,7 @@ class VectorStore:
                 self._collection.update(ids=chunk_ids, metadatas=chunk_metas)
                 repaired += len(chunk_ids)
             except Exception:  # noqa: BLE001
-                import logging
-
-                logging.getLogger(__name__).exception(
-                    "Failed to sync Chroma user_id metadata"
-                )
+                logger.exception("Failed to sync Chroma user_id metadata")
         return repaired
 
 

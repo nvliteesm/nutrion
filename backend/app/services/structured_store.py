@@ -7,7 +7,12 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.orm import Intake
-from app.models.schemas import DailyTotals, ExtractedMeal, IntakeRecord, NutrientValues
+from app.models.schemas import (
+    DailyTotals,
+    ExtractedMeal,
+    IntakeNutrientPatch,
+    IntakeRecord,
+)
 
 
 def _utc_now() -> datetime:
@@ -105,7 +110,7 @@ async def update_intake(
     *,
     name: str | None = None,
     serving: str | None = None,
-    nutrients: NutrientValues | None = None,
+    nutrients: IntakeNutrientPatch | None = None,
 ) -> IntakeRecord | None:
     row = await session.get(Intake, intake_id)
     if not row:
@@ -115,21 +120,30 @@ async def update_intake(
     if serving is not None:
         row.serving = serving
     if nutrients is not None:
-        row.calories = nutrients.calories
-        row.protein_g = nutrients.protein_g
-        row.carbs_g = nutrients.carbs_g
-        row.fat_g = nutrients.fat_g
-        row.fiber_g = nutrients.fiber_g
-        row.sugar_g = nutrients.sugar_g
-        row.sodium_mg = nutrients.sodium_mg
-        try:
-            existing = {
-                k: float(v) for k, v in json.loads(row.extras_json or "{}").items()
-            }
-        except Exception:
-            existing = {}
-        existing.update(nutrients.extras or {})
-        row.extras_json = json.dumps(existing)
+        if nutrients.calories is not None:
+            row.calories = nutrients.calories
+        if nutrients.protein_g is not None:
+            row.protein_g = nutrients.protein_g
+        if nutrients.carbs_g is not None:
+            row.carbs_g = nutrients.carbs_g
+        if nutrients.fat_g is not None:
+            row.fat_g = nutrients.fat_g
+        if nutrients.fiber_g is not None:
+            row.fiber_g = nutrients.fiber_g
+        if nutrients.sugar_g is not None:
+            row.sugar_g = nutrients.sugar_g
+        if nutrients.sodium_mg is not None:
+            row.sodium_mg = nutrients.sodium_mg
+        if nutrients.extras is not None:
+            try:
+                existing = {
+                    k: float(v)
+                    for k, v in json.loads(row.extras_json or "{}").items()
+                }
+            except Exception:
+                existing = {}
+            existing.update(nutrients.extras)
+            row.extras_json = json.dumps(existing)
     await session.commit()
     await session.refresh(row)
     return intake_to_record(row)

@@ -27,25 +27,6 @@ import type {
  * No hardcoded/mock data.
  */
 
-/**
- * Long AI analyze calls (15–90s) go straight to FastAPI in the browser.
- * Next.js rewrites drop mid-request when Turbopack recompiles, which was
- * surfacing as "backend restarted or timed out" on food/medical upload.
- */
-function analyzeApiBase(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-  // On Vercel, frontend and backend share the same domain via routes.
-  // In local dev, Next.js rewrites handle the proxy.
-  // Either way, relative paths ("/api/...") work.
-  return "";
-}
-
-function analyzeUrl(path: string): string {
-  const base = analyzeApiBase();
-  return base ? `${base}${path}` : path;
-}
-
 /** Shape of a backend IntakeRecord. */
 interface BackendIntake {
   id: number;
@@ -212,12 +193,6 @@ export function invalidateEntriesCache(): void {
   entriesInflight = null;
 }
 
-export async function getTodayEntries(): Promise<IntakeEntry[]> {
-  const today = getToday();
-  const all = await getAllEntries();
-  return all.filter((e) => localDayKey(e.loggedAt) === today);
-}
-
 export async function getTodayTotals(): Promise<DailyTotals> {
   const today = getToday();
   const all = await getAllEntries();
@@ -313,27 +288,7 @@ export async function calculateSugarBarrier(input: {
         use_latest_labs: true,
       }),
     });
-    if (!res.ok) {
-      // Legacy path if older backend only has /profile/sugar-barrier
-      const legacy = await apiFetch("/api/profile/sugar-barrier", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: input.user_id ?? getCurrentUserId(),
-          age: input.age ?? null,
-          sex: input.sex ?? null,
-          height_cm: input.height_cm ?? null,
-          hba1c: input.hba1c ?? null,
-          fasting_glucose: input.fasting_glucose ?? null,
-          use_latest_labs: true,
-        }),
-      });
-      if (!legacy.ok) return fallback();
-      const legacyData = (await legacy.json()) as SugarBarrierResult;
-      if (legacyData.calories == null) legacyData.calories = fallback().calories;
-      if (legacyData.water_cups == null) legacyData.water_cups = fallback().water_cups;
-      return legacyData;
-    }
+    if (!res.ok) return fallback();
     const data = (await res.json()) as SugarBarrierResult;
     if (data.calories == null) data.calories = fallback().calories;
     if (data.water_cups == null) data.water_cups = fallback().water_cups;
@@ -371,7 +326,8 @@ export async function analyzeDrink(file: File, userId?: string): Promise<DrinkAn
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId ?? getCurrentUserId());
-  const res = await apiFetch(analyzeUrl("/api/drinks/analyze"), { method: "POST", body: form });
+  // apiFetch prefixes NEXT_PUBLIC_BACKEND_URL so long AI scans bypass the Next rewrite.
+  const res = await apiFetch("/api/drinks/analyze", { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
@@ -391,7 +347,7 @@ export async function analyzeFood(file: File, userId?: string): Promise<FoodAnal
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId ?? getCurrentUserId());
-  const res = await apiFetch(analyzeUrl("/api/foods/analyze"), { method: "POST", body: form });
+  const res = await apiFetch("/api/foods/analyze", { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
@@ -411,7 +367,7 @@ export async function analyzeMedical(file: File, userId?: string): Promise<Medic
   const form = new FormData();
   form.append("file", file);
   form.append("user_id", userId ?? getCurrentUserId());
-  const res = await apiFetch(analyzeUrl("/api/medical/analyze"), { method: "POST", body: form });
+  const res = await apiFetch("/api/medical/analyze", { method: "POST", body: form });
   if (!res.ok) await apiError(res);
   return res.json();
 }
@@ -539,14 +495,14 @@ export async function patchEntry(
       };
       if (n.caffeine_mg != null) extras.caffeine_mg = n.caffeine_mg;
       if (patch.volumeMl != null) extras.drink_volume_ml = patch.volumeMl;
+      // Omit fiber_g — frontend does not edit it; backend preserves existing.
       body.nutrients = {
         calories: n.calories,
         protein_g: n.protein_g,
         carbs_g: n.carbs_g,
         fat_g: n.fat_g,
-        fiber_g: 0,
         sugar_g: n.totalSugar_g,
-        sodium_mg: 0,
+        ...(n.sodium_mg != null ? { sodium_mg: n.sodium_mg } : {}),
         extras,
       };
     }
@@ -556,8 +512,10 @@ export async function patchEntry(
       body: JSON.stringify(body),
     });
     if (!res.ok) await apiError(res);
+    invalidateEntriesCache();
   } else {
     updateEntry(id, patch);
+    invalidateEntriesCache();
   }
 }
 
@@ -575,6 +533,7 @@ export async function uploadEntryImage(
     });
     if (!res.ok) await apiError(res);
     const row = (await res.json()) as BackendIntake;
+    invalidateEntriesCache();
     return filePathToUrl(row.file_path) ?? "";
   }
 
@@ -585,5 +544,6 @@ export async function uploadEntryImage(
     reader.readAsDataURL(file);
   });
   updateEntry(entry.id, { imageUrl: dataUrl });
+  invalidateEntriesCache();
   return dataUrl;
 }

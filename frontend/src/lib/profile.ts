@@ -136,14 +136,6 @@ export function applyIntakeTargets(
   return next;
 }
 
-/** @deprecated Prefer applyIntakeTargets */
-export function applySugarBarrier(
-  sugar_g: number,
-  note?: string,
-): StoredProfile {
-  return applyIntakeTargets({ sugar_g }, note);
-}
-
 export function hasPersonalBasics(personal: PersonalData): boolean {
   return (
     personal.age != null &&
