@@ -1,25 +1,41 @@
 {
-  "version": 2,
-  "builds": [
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "root": "backend"
+    }
+  },
+  "rewrites": [
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/next"
+      "source": "/api/(.*)",
+      "destination": { "type": "service", "service": "backend" }
     },
     {
-      "src": "backend/requirements.txt",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb"
-      }
+      "source": "/intakes(.*)",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/memory/(.*)",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/health",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/chat",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": { "type": "service", "service": "backend" }
+    },
+    {
+      "source": "/(.*)",
+      "destination": { "type": "service", "service": "frontend" }
     }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "backend/app/main.py" },
-    { "src": "/intakes(.*)", "dest": "backend/app/main.py" },
-    { "src": "/memory/(.*)", "dest": "backend/app/main.py" },
-    { "src": "/health", "dest": "backend/app/main.py" },
-    { "src": "/chat", "dest": "backend/app/main.py" },
-    { "src": "/uploads/(.*)", "dest": "backend/app/main.py" },
-    { "src": "/(.*)", "dest": "frontend/$1" }
   ]
 }
